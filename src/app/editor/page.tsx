@@ -68,7 +68,12 @@ export default function Editor() {
     setIsSaving(true);
     const handler = setTimeout(() => {
       if (user) {
-        saveDraft(user.uid, text).finally(() => setIsSaving(false));
+        saveDraft(user.uid, text)
+          .catch(error => {
+            console.error("Error saving draft to Firestore:", error);
+            // In a future step, we could show a toast notification to the user
+          })
+          .finally(() => setIsSaving(false));
       } else {
         localStorage.setItem("draft_guest", text);
         setIsSaving(false);
