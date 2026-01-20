@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useSearchParams } from "next/navigation";
 import { Lock, Cloud, CloudOff } from "lucide-react";
 import { onAuth, logout } from "@/lib/auth";
@@ -14,6 +14,9 @@ export default function Editor() {
   const [isAuthModalOpen, setAuthModalOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const searchParams = useSearchParams();
+
+  // This ref is used to prevent the debounced save effect from running on initial data load.
+  const isReadyForSaving = useRef(false);
 
   // Open auth modal if query param is present
   useEffect(() => {
@@ -34,6 +37,9 @@ export default function Editor() {
     if (user === undefined) {
       return; // Auth state is still loading
     }
+    
+    // Whenever the user changes, we are not ready for auto-saving until data is loaded.
+    isReadyForSaving.current = false;
 
     const initializeDraft = async () => {
       const guestDraft = localStorage.getItem("draft_guest");
@@ -41,10 +47,17 @@ export default function Editor() {
       if (user) {
         // User is logged IN
         if (guestDraft) {
-          // A guest draft exists, migrate it. This is now the source of truth.
+          // A guest draft exists, migrate it.
           setText(guestDraft);
-          // The debounced save effect will now handle writing this to Firestore.
-          localStorage.removeItem("draft_guest");
+          try {
+            // We attempt to save the migrated draft immediately.
+            // This is the most likely point of failure due to race conditions.
+            await saveDraft(user.uid, guestDraft);
+            localStorage.removeItem("draft_guest");
+          } catch (error) {
+             console.error("Error migrating guest draft to Firestore:", error);
+             // If migration fails, we leave the draft in local storage and the user can trigger a save later by typing.
+          }
         } else {
           // No guest draft, just load from the cloud
           const cloudDraft = await loadDraft(user.uid);
@@ -61,10 +74,15 @@ export default function Editor() {
 
   // Debounced save effect for any subsequent changes
   useEffect(() => {
-    if (user === undefined) {
+    // If we're not ready for saving (because data was just loaded), we do two things:
+    // 1. Mark that we are now ready for any FUTURE changes.
+    // 2. Skip the current save.
+    if (!isReadyForSaving.current) {
+      isReadyForSaving.current = true;
       return;
     }
     
+    // If we get here, it means the text change was initiated by the user, not by initial data load.
     setIsSaving(true);
     const handler = setTimeout(() => {
       if (user) {
@@ -78,7 +96,7 @@ export default function Editor() {
         localStorage.setItem("draft_guest", text);
         setIsSaving(false);
       }
-    }, 500);
+    }, 1000); // Increased debounce for extra safety margin against race conditions.
 
     return () => {
       clearTimeout(handler);
