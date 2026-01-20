@@ -43,7 +43,7 @@ export default function Editor() {
         if (guestDraft) {
           // A guest draft exists, migrate it. This is now the source of truth.
           setText(guestDraft);
-          await saveDraft(user.uid, guestDraft);
+          // The debounced save effect will now handle writing this to Firestore.
           localStorage.removeItem("draft_guest");
         } else {
           // No guest draft, just load from the cloud
