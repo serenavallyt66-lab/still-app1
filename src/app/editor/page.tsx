@@ -47,17 +47,9 @@ export default function Editor() {
       if (user) {
         // User is logged IN
         if (guestDraft) {
-          // A guest draft exists, migrate it.
+          // A guest draft exists, migrate it by loading it into the editor.
+          // The debounced save effect will automatically handle saving it to Firestore.
           setText(guestDraft);
-          try {
-            // We attempt to save the migrated draft immediately.
-            // This is the most likely point of failure due to race conditions.
-            await saveDraft(user.uid, guestDraft);
-            localStorage.removeItem("draft_guest");
-          } catch (error) {
-             console.error("Error migrating guest draft to Firestore:", error);
-             // If migration fails, we leave the draft in local storage and the user can trigger a save later by typing.
-          }
         } else {
           // No guest draft, just load from the cloud
           const cloudDraft = await loadDraft(user.uid);
@@ -87,6 +79,12 @@ export default function Editor() {
     const handler = setTimeout(() => {
       if (user) {
         saveDraft(user.uid, text)
+          .then(() => {
+            // If a cloud save is successful, we can safely remove any lingering guest draft.
+            if (localStorage.getItem("draft_guest")) {
+              localStorage.removeItem("draft_guest");
+            }
+          })
           .catch(error => {
             console.error("Error saving draft to Firestore:", error);
             // In a future step, we could show a toast notification to the user
