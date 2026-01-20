@@ -1,6 +1,7 @@
 'use client';
 import React, { useState, useEffect, useRef } from "react";
-import { ArrowRight, Feather, Lock } from "lucide-react";
+import { ArrowRight, Feather } from "lucide-react";
+import { useRouter } from "next/navigation";
 
 /**
  * 🧱 COMPONENTS: BRANDING
@@ -51,17 +52,60 @@ function StillLogo() {
   );
 }
 
-/**
- * 🚀 MAIN APPLICATION
- */
+// Simple Intersection Hook for animations
+const useIntersect = (options = {}) => {
+  const ref = useRef(null);
+  const [visible, setVisible] = useState(false);
 
-export default function App() {
-  // Editor page removed. Only rendering Landing.
-  return <Landing onEnter={() => alert("Editor view is currently disabled.")} />;
+  useEffect(() => {
+    const observer = new IntersectionObserver(([entry]) => {
+      if (entry.isIntersecting) {
+        setVisible(true);
+        observer.disconnect();
+      }
+    }, options);
+
+    const currentRef = ref.current;
+    if (currentRef) {
+      observer.observe(currentRef);
+    }
+
+    return () => {
+      if (currentRef) {
+        observer.unobserve(currentRef);
+      }
+    };
+  }, [ref, options]);
+
+  return [ref, visible];
+};
+
+
+// Helper for scroll reveal sections
+function ScrollBlock({ title, desc }: { title: string; desc: string }) {
+  const [ref, visible] = useIntersect({ threshold: 0.2 });
+  return (
+    <div
+      ref={ref as React.RefObject<HTMLDivElement>}
+      className={`transition-all duration-1000 ease-out transform ${
+        visible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-16"
+      }`}
+    >
+      <h2 className="font-serif text-3xl md:text-4xl text-stone-800 mb-4">{title}</h2>
+      <p className="font-sans text-lg text-stone-500 leading-relaxed max-w-md">
+        {desc}
+      </p>
+    </div>
+  );
 }
 
-// ✅ LANDING COMPONENT (Unchanged, with Logo)
-function Landing({ onEnter }) {
+
+/**
+ * 🚀 MAIN LANDING PAGE
+ */
+export default function Landing() {
+  const router = useRouter();
+
   return (
     <div className="min-h-screen bg-[#fcfbf9] text-stone-800 selection:bg-stone-200 overflow-x-hidden relative">
       
@@ -87,9 +131,8 @@ function Landing({ onEnter }) {
 
           {/* Primary CTA */}
           <div className="flex flex-col sm:flex-row justify-center items-center gap-8 pt-6">
-            {/* Option preserved, but logic disconnected as Editor is removed */}
             <button
-              onClick={onEnter}
+              onClick={() => router.push("/editor")}
               className="group font-sans text-stone-800 border-b border-stone-800
                          pb-1 flex items-center gap-2 hover:text-stone-500
                          hover:border-stone-400 transition-all duration-300"
@@ -102,7 +145,7 @@ function Landing({ onEnter }) {
 
             <button 
               className="text-sm font-sans text-stone-400 hover:text-stone-600 transition-colors"
-              onClick={() => alert("Login coming soon.")}
+              onClick={() => router.push("/editor?auth=true")}
             >
               Sign in to save privately
             </button>
@@ -146,39 +189,3 @@ function Landing({ onEnter }) {
     </div>
   );
 }
-
-// Helper for scroll reveal
-function ScrollBlock({ title, desc }) {
-  const [ref, visible] = useIntersect({ threshold: 0.2 });
-  return (
-    <div
-      ref={ref}
-      className={`transition-all duration-1000 ease-out transform ${
-        visible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-16'
-      }`}
-    >
-      <h2 className="font-serif text-3xl md:text-4xl text-stone-800 mb-4">{title}</h2>
-      <p className="font-sans text-lg text-stone-500 leading-relaxed max-w-md">
-        {desc}
-      </p>
-    </div>
-  );
-}
-
-// Simple Intersection Hook
-const useIntersect = (options = {}) => {
-  const [ref, setRef] = useState(null);
-  const [visible, setVisible] = useState(false);
-  useEffect(() => {
-    if (!ref) return;
-    const observer = new IntersectionObserver(([entry]) => {
-      if (entry.isIntersecting) {
-        setVisible(true);
-        observer.disconnect();
-      }
-    }, options);
-    observer.observe(ref);
-    return () => observer.disconnect();
-  }, [ref, options]);
-  return [setRef, visible];
-};

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { Lock, Cloud, CloudOff } from "lucide-react";
 import { onAuth, logout } from "@/lib/auth";
 import { saveDraft, loadDraft } from "@/lib/firestore";
@@ -12,6 +13,14 @@ export default function Editor() {
   const [text, setText] = useState("");
   const [isAuthModalOpen, setAuthModalOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const searchParams = useSearchParams();
+
+  // Open auth modal if query param is present
+  useEffect(() => {
+    if (searchParams.get("auth") === "true" && user === null) {
+      setAuthModalOpen(true);
+    }
+  }, [searchParams, user]);
 
 
   // Listen for auth state changes
