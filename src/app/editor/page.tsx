@@ -81,18 +81,15 @@ export default function Editor() {
   }, [text, user]);
 
 
-  const handleLoginSuccess = (newUser: User) => {
-    if (!newUser) return;
-    // The useEffect listening to onAuth will handle the state change and data migration.
-    // We just need to close the modal.
-    // We can also optimistically set the user to make the UI feel faster.
-    setUser(newUser);
+  const handleLoginSuccess = () => {
+    // The onAuth listener will automatically update the user state.
+    // All we need to do is close the modal.
     setAuthModalOpen(false);
   };
 
   const handleLogout = () => {
     logout();
-    setUser(null); // Let the onAuth listener handle state changes for consistency
+    // The onAuth listener will set the user to null.
   };
 
   return (

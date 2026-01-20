@@ -3,9 +3,8 @@
 import React, { useState } from 'react';
 import { Mail, X, ShieldCheck } from 'lucide-react';
 import { signInWithGoogle, signUpWithEmailAndPassword } from '@/lib/auth';
-import { User } from '@/types/user';
 
-const AuthPage = ({ onDismiss, onLoginSuccess }: { onDismiss: () => void, onLoginSuccess: (user: User) => void }) => {
+const AuthPage = ({ onDismiss, onLoginSuccess }: { onDismiss: () => void, onLoginSuccess: () => void }) => {
   const [emailMode, setEmailMode] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -16,8 +15,8 @@ const AuthPage = ({ onDismiss, onLoginSuccess }: { onDismiss: () => void, onLogi
     setIsAnimating(true);
     setError('');
     try {
-      const user = await signInWithGoogle();
-      if(user) onLoginSuccess(user);
+      await signInWithGoogle();
+      onLoginSuccess();
     } catch (err: any) {
       console.error(err);
       setError('Failed to sign in with Google.');
@@ -30,8 +29,8 @@ const AuthPage = ({ onDismiss, onLoginSuccess }: { onDismiss: () => void, onLogi
     setIsAnimating(true);
     setError('');
     try {
-      const user = await signUpWithEmailAndPassword(email, password);
-      onLoginSuccess(user);
+      await signUpWithEmailAndPassword(email, password);
+      onLoginSuccess();
     } catch (err: any) {
       console.error(err);
       if (err.code === 'auth/email-already-in-use') {

@@ -12,22 +12,14 @@ export function onAuth(callback: (user: User) => void) {
   });
 }
 
-export async function signInWithGoogle() {
+export async function signInWithGoogle(): Promise<void> {
   const provider = new GoogleAuthProvider();
-  const result = await signInWithPopup(auth, provider);
-  return {
-    uid: result.user.uid,
-    email: result.user.email!,
-  };
+  await signInWithPopup(auth, provider);
 }
 
-export async function signUpWithEmailAndPassword(email: string, password: string): Promise<{uid: string, email: string}> {
-    const result = await createUserWithEmailAndPassword(auth, email, password);
-    return {
-      uid: result.user.uid,
-      email: result.user.email!,
-    };
-  }
+export async function signUpWithEmailAndPassword(email: string, password: string): Promise<void> {
+    await createUserWithEmailAndPassword(auth, email, password);
+}
 
 export async function logout() {
   await signOut(auth);
