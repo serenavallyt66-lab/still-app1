@@ -23,63 +23,76 @@ export default function Editor() {
   }, [searchParams, user]);
 
 
-  // Listen for auth state changes
+  // Listen for auth state changes to be the single source of truth
   useEffect(() => {
     const unsubscribe = onAuth(setUser);
     return () => unsubscribe();
   }, []);
 
-  // Load draft from DB or local storage
+  // Effect to load initial data and handle guest->user migration
   useEffect(() => {
-    if (user === undefined) return;
+    if (user === undefined) {
+      return; // Auth state is still loading
+    }
 
-    const fetchDraft = async () => {
-      let content = "";
+    const initializeDraft = async () => {
+      const guestDraft = localStorage.getItem("draft_guest");
+
       if (user) {
-        content = await loadDraft(user.uid);
+        // User is logged IN
+        if (guestDraft) {
+          // A guest draft exists, migrate it. This is now the source of truth.
+          setText(guestDraft);
+          await saveDraft(user.uid, guestDraft);
+          localStorage.removeItem("draft_guest");
+        } else {
+          // No guest draft, just load from the cloud
+          const cloudDraft = await loadDraft(user.uid);
+          setText(cloudDraft);
+        }
       } else {
-        content = localStorage.getItem("draft_guest") || "";
+        // User is logged OUT
+        setText(guestDraft || "");
       }
-      setText(content);
     };
 
-    fetchDraft();
-  }, [user]);
+    initializeDraft();
+  }, [user]); // This effect runs only when user auth state is resolved or changes
 
-  // Save draft to DB or local storage
+  // Debounced save effect for any subsequent changes
   useEffect(() => {
-    if (user === undefined) return;
+    if (user === undefined) {
+      return;
+    }
+    
     setIsSaving(true);
     const handler = setTimeout(() => {
       if (user) {
-        saveDraft(user.uid, text);
+        saveDraft(user.uid, text).finally(() => setIsSaving(false));
       } else {
         localStorage.setItem("draft_guest", text);
+        setIsSaving(false);
       }
-      setIsSaving(false);
-    }, 500); // Debounce saving
+    }, 500);
 
-    return () => clearTimeout(handler);
+    return () => {
+      clearTimeout(handler);
+    }
   }, [text, user]);
 
 
   const handleLoginSuccess = (newUser: User) => {
     if (!newUser) return;
-    
-    const guestDraft = localStorage.getItem("draft_guest");
-    if (guestDraft) {
-      saveDraft(newUser.uid, guestDraft);
-      setText(guestDraft); // Ensure text is in state
-      localStorage.removeItem("draft_guest");
-    }
-    
+    // The useEffect listening to onAuth will handle the state change and data migration.
+    // We just need to close the modal.
+    // We can also optimistically set the user to make the UI feel faster.
     setUser(newUser);
     setAuthModalOpen(false);
   };
 
   const handleLogout = () => {
     logout();
-    setUser(null);
+    setUser(null); // Let the onAuth listener handle state changes for consistency
   };
 
   return (
