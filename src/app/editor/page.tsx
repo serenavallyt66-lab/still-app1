@@ -94,7 +94,7 @@ export default function Editor() {
         localStorage.setItem("draft_guest", text);
         setIsSaving(false);
       }
-    }, 1000); // Increased debounce for extra safety margin against race conditions.
+    }, 1000); // 1-second debounce
 
     return () => {
       clearTimeout(handler);
