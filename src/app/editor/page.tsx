@@ -80,11 +80,12 @@ export default function Editor() {
       return;
     }
     
-    // If we get here, it means the text change was initiated by the user.
+    // User started typing, show saving indicator.
+    setIsSaving(true);
+    
     const handler = setTimeout(() => {
       if (user) {
         // User is logged in, save to Firestore
-        setIsSaving(true);
         saveDraft(user.uid, text)
           .then(() => {
             // If a cloud save is successful, we can safely remove any lingering guest draft.
@@ -98,16 +99,15 @@ export default function Editor() {
           .finally(() => setIsSaving(false));
       } else {
         // User is a guest, save to localStorage
-        setIsSaving(true);
         localStorage.setItem("draft_guest", text);
         setTimeout(() => setIsSaving(false), 300); // Visual feedback for local save
       }
-    }, 1000); // 1-second debounce
+    }, 1500); // 1.5-second debounce
 
     return () => {
       clearTimeout(handler);
     }
-  }, [text]); // Only trigger on text changes
+  }, [text, user]); // Rerun on text or user change
 
 
   const handleLogout = () => {
@@ -128,17 +128,22 @@ export default function Editor() {
         <span className="flex items-center gap-2 animate-fade-in">
           {user === undefined ? (
             <span className="w-4 h-4 border-2 border-stone-200 border-t-stone-400 rounded-full animate-spin" />
+          ) : isSaving ? (
+             <>
+               <Cloud size={14} className="animate-pulse" /> 
+               <span className="text-stone-500 font-medium">Saving...</span>
+             </>
           ) : user ? (
             <>
               <Cloud size={14} className="text-emerald-600/70" /> 
               <span className="text-stone-500 font-medium">
-                {isSaving ? 'Saving...' : 'Draft secured'}
+                Draft secured
               </span>
             </>
           ) : (
             <>
               <CloudOff size={14} /> 
-              {isSaving ? 'Saving...' : 'Local only'}
+              <span className="text-stone-500 font-medium">Local only</span>
             </>
           )}
         </span>
