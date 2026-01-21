@@ -106,9 +106,11 @@ function ScrollBlock({ title, desc }: { title: string; desc: string }) {
 export default function Landing() {
   const router = useRouter();
 
-  // On page load, check for a guest draft. If it exists, redirect to the editor.
+  // On page load, check for a non-empty guest draft. If it exists, redirect to the editor.
   useEffect(() => {
-    if (localStorage.getItem("draft_guest")) {
+    const guestDraft = localStorage.getItem("draft_guest");
+    // Only redirect if there's a draft and it has content.
+    if (guestDraft && guestDraft.length > 0) {
       router.push("/editor");
     }
   }, [router]);
