@@ -16,11 +16,17 @@ const AuthPage = ({ onDismiss }: { onDismiss: () => void }) => {
     setError('');
     try {
       await signInWithGoogle();
-      // onAuthStateChanged will handle closing the modal and updating the user state.
+      // On success, onAuthStateChanged in the parent component will handle closing the modal.
+      // We don't need to set isAnimating to false here because the component will unmount.
     } catch (err: any) {
-      console.error(err);
-      setError('Failed to sign in with Google.');
-      setIsAnimating(false);
+      if (err.code === 'auth/popup-blocked') {
+        setError('Popup blocked. Please allow popups for this site to sign in.');
+      } else if (err.code !== 'auth/popup-closed-by-user') {
+        // Don't show an error if the user just closes the window.
+        console.error('Google Sign-In Error:', err);
+        setError('An error occurred during sign-in. Please try again.');
+      }
+      setIsAnimating(false); // Reset animation on any error or cancellation.
     }
   };
   
