@@ -80,8 +80,10 @@ export default function Editor() {
       return;
     }
     
-    // User started typing, show saving indicator.
-    setIsSaving(true);
+    // User started typing, show saving indicator only for logged-in users.
+    if (user) {
+      setIsSaving(true);
+    }
     
     const handler = setTimeout(() => {
       if (user) {
@@ -98,9 +100,8 @@ export default function Editor() {
           })
           .finally(() => setIsSaving(false));
       } else {
-        // User is a guest, save to localStorage
+        // User is a guest, save to localStorage silently
         localStorage.setItem("draft_guest", text);
-        setTimeout(() => setIsSaving(false), 300); // Visual feedback for local save
       }
     }, 1500); // 1.5-second debounce
 
@@ -128,18 +129,20 @@ export default function Editor() {
         <span className="flex items-center gap-2 animate-fade-in">
           {user === undefined ? (
             <span className="w-4 h-4 border-2 border-stone-200 border-t-stone-400 rounded-full animate-spin" />
-          ) : isSaving ? (
+          ) : user ? (
+            isSaving ? (
              <>
                <Cloud size={14} className="animate-pulse" /> 
                <span className="text-stone-500 font-medium">Saving...</span>
              </>
-          ) : user ? (
-            <>
-              <Cloud size={14} className="text-emerald-600/70" /> 
-              <span className="text-stone-500 font-medium">
-                Draft secured
-              </span>
-            </>
+            ) : (
+              <>
+                <Cloud size={14} className="text-emerald-600/70" /> 
+                <span className="text-stone-500 font-medium">
+                  Draft secured
+                </span>
+              </>
+            )
           ) : (
             <>
               <CloudOff size={14} /> 
