@@ -1,9 +1,9 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // User can read/write ONLY their own doc in the 'users' collection.
-    // The document ID must match the user's UID.
-    match /users/{userId} {
+    // User can read/write ONLY their own documents in the 'drafts' subcollection.
+    // The path matches the new data structure: users/{userId}/drafts/{draftId}
+    match /users/{userId}/drafts/{draftId} {
       allow read, write: if request.auth != null && request.auth.uid == userId;
     }
   }
