@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { ArrowRight, Feather } from "lucide-react";
 import { useRouter } from "next/navigation";
+import EditorPage from "./editor/page";
 
 /**
  * 🧱 COMPONENTS: BRANDING
@@ -101,20 +102,35 @@ function ScrollBlock({ title, desc }: { title: string; desc: string }) {
 
 
 /**
- * 🚀 MAIN LANDING PAGE
+ * 🚀 MAIN LANDING PAGE / APP ENTRY
  */
-export default function Landing() {
+export default function AppEntry() {
   const router = useRouter();
+  const [showEditor, setShowEditor] = useState<boolean | null>(null);
 
-  // On page load, check for a non-empty guest draft. If it exists, redirect to the editor.
+  // On initial load, decide whether to show the editor or the landing page.
+  // This avoids a client-side redirect and the flash of content that comes with it.
   useEffect(() => {
     const guestDraft = localStorage.getItem("draft_guest");
-    // Only redirect if there's a draft and it has content.
-    if (guestDraft && guestDraft.length > 0) {
-      router.push("/editor");
+    // Only show editor if there's a draft with actual content.
+    if (guestDraft && guestDraft.trim().length > 0) {
+      setShowEditor(true);
+    } else {
+      setShowEditor(false);
     }
-  }, [router]);
+  }, []);
 
+  // While checking for the draft, render a blank screen to prevent flashing the landing page.
+  if (showEditor === null) {
+    return <div className="min-h-screen bg-[#fcfbf9]"></div>;
+  }
+
+  // If a draft exists, render the editor directly.
+  if (showEditor) {
+    return <EditorPage />;
+  }
+
+  // Otherwise, render the landing page.
   return (
     <div className="min-h-screen bg-[#fcfbf9] text-stone-800 selection:bg-stone-200 overflow-x-hidden relative">
       
