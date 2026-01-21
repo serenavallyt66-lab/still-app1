@@ -195,7 +195,7 @@ export default function Editor() {
         />
 
         {/* SOFT GUIDANCE */}
-        {text.length > 0 && (
+        {text.length > 0 && text.length < 400 && (
           <div className="mt-6 flex flex-col items-start gap-4 animate-in fade-in slide-in-from-bottom-2 duration-700">
              <p className="text-xs text-stone-400 font-sans italic">
                You don’t have to finish this.
