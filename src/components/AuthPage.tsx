@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import { Mail, X, ShieldCheck } from 'lucide-react';
 import { signInWithGoogle, signUpWithEmailAndPassword } from '@/lib/auth';
 
-const AuthPage = ({ onDismiss, onLoginSuccess }: { onDismiss: () => void, onLoginSuccess: () => void }) => {
+const AuthPage = ({ onDismiss }: { onDismiss: () => void }) => {
   const [emailMode, setEmailMode] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -16,7 +16,7 @@ const AuthPage = ({ onDismiss, onLoginSuccess }: { onDismiss: () => void, onLogi
     setError('');
     try {
       await signInWithGoogle();
-      // onAuthStateChanged will handle the rest, including calling onLoginSuccess.
+      // onAuthStateChanged will handle closing the modal and updating the user state.
     } catch (err: any) {
       console.error(err);
       setError('Failed to sign in with Google.');
@@ -30,7 +30,7 @@ const AuthPage = ({ onDismiss, onLoginSuccess }: { onDismiss: () => void, onLogi
     setError('');
     try {
       await signUpWithEmailAndPassword(email, password);
-      // onAuthStateChanged will handle the rest, including calling onLoginSuccess.
+      // onAuthStateChanged will handle closing the modal and updating the user state.
     } catch (err: any) {
       console.error(err);
       if (err.code === 'auth/email-already-in-use') {

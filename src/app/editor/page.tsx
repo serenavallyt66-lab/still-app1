@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useEffect, useState, useRef } from "react";
@@ -27,7 +26,13 @@ export default function Editor() {
 
   // Listen for auth state changes to be the single source of truth
   useEffect(() => {
-    const unsubscribe = onAuth(setUser);
+    const unsubscribe = onAuth((newUser) => {
+      setUser(newUser);
+      // If we get a user object, it means login was successful.
+      if (newUser) {
+        setAuthModalOpen(false);
+      }
+    });
     return () => unsubscribe();
   }, []);
 
@@ -105,10 +110,6 @@ export default function Editor() {
   }, [text]); // Only trigger on text changes
 
 
-  const handleLoginSuccess = () => {
-    setAuthModalOpen(false);
-  };
-
   const handleLogout = () => {
     logout();
   };
@@ -119,7 +120,6 @@ export default function Editor() {
       {isAuthModalOpen && (
         <AuthPage
           onDismiss={() => setAuthModalOpen(false)}
-          onLoginSuccess={handleLoginSuccess}
         />
       )}
 
