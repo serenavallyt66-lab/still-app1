@@ -106,6 +106,13 @@ function ScrollBlock({ title, desc }: { title: string; desc: string }) {
 export default function Landing() {
   const router = useRouter();
 
+  // On page load, check for a guest draft. If it exists, redirect to the editor.
+  useEffect(() => {
+    if (localStorage.getItem("draft_guest")) {
+      router.push("/editor");
+    }
+  }, [router]);
+
   return (
     <div className="min-h-screen bg-[#fcfbf9] text-stone-800 selection:bg-stone-200 overflow-x-hidden relative">
       
