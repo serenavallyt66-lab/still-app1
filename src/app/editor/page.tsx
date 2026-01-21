@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useEffect, useState, useRef } from "react";
@@ -9,14 +10,12 @@ import type { User } from "@/types/user";
 import AuthPage from "@/components/AuthPage";
 
 export default function Editor() {
-  const [user, setUser] = useState<User | undefined>(undefined); // undefined for loading state
+  const [user, setUser] = useState<User | undefined>(undefined); // undefined: auth state is loading
   const [text, setText] = useState("");
   const [isAuthModalOpen, setAuthModalOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const searchParams = useSearchParams();
-
-  // This ref is used to prevent the debounced save effect from running on initial data load.
-  const isReadyForSaving = useRef(false);
+  const isMounted = useRef(false);
 
   // Open auth modal if query param is present
   useEffect(() => {
@@ -35,13 +34,13 @@ export default function Editor() {
   // Effect to load initial data and handle guest->user migration
   useEffect(() => {
     if (user === undefined) {
-      return; // Auth state is still loading
+      return; // Auth state is still loading, do nothing.
     }
-    
-    // Whenever the user changes, we are not ready for auto-saving until data is loaded.
-    isReadyForSaving.current = false;
 
     const initializeDraft = async () => {
+      // Mark that initial load is happening.
+      // This prevents the save effect from firing on this initial text change.
+      isMounted.current = false;
       const guestDraft = localStorage.getItem("draft_guest");
 
       if (user) {
@@ -56,9 +55,14 @@ export default function Editor() {
           setText(cloudDraft);
         }
       } else {
-        // User is logged OUT
+        // User is logged OUT (is a guest)
         setText(guestDraft || "");
       }
+      
+      // Use a timeout to ensure this runs after the state has been set and rendered.
+      setTimeout(() => {
+        isMounted.current = true;
+      }, 50);
     };
 
     initializeDraft();
@@ -66,15 +70,12 @@ export default function Editor() {
 
   // Debounced save effect for any subsequent changes
   useEffect(() => {
-    // If we're not ready for saving (because data was just loaded), we do two things:
-    // 1. Mark that we are now ready for any FUTURE changes.
-    // 2. Skip the current save.
-    if (!isReadyForSaving.current) {
-      isReadyForSaving.current = true;
+    // Do not save on the very first render or during the initial data load.
+    if (!isMounted.current) {
       return;
     }
     
-    // If we get here, it means the text change was initiated by the user, not by initial data load.
+    // If we get here, it means the text change was initiated by the user.
     const handler = setTimeout(() => {
       if (user) {
         // User is logged in, save to Firestore
@@ -88,32 +89,28 @@ export default function Editor() {
           })
           .catch(error => {
             console.error("Error saving draft to Firestore:", error);
-            // In a future step, we could show a toast notification to the user
           })
           .finally(() => setIsSaving(false));
       } else {
         // User is a guest, save to localStorage
         setIsSaving(true);
         localStorage.setItem("draft_guest", text);
-        setIsSaving(false);
+        setTimeout(() => setIsSaving(false), 300); // Visual feedback for local save
       }
     }, 1000); // 1-second debounce
 
     return () => {
       clearTimeout(handler);
     }
-  }, [text, user]);
+  }, [text]); // Only trigger on text changes
 
 
   const handleLoginSuccess = () => {
-    // The onAuth listener will automatically update the user state.
-    // All we need to do is close the modal.
     setAuthModalOpen(false);
   };
 
   const handleLogout = () => {
     logout();
-    // The onAuth listener will set the user to null.
   };
 
   return (
