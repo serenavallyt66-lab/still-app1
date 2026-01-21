@@ -6,7 +6,6 @@ import { signInWithGoogle, signUpWithEmailAndPassword, signInWithEmailAndPasswor
 
 const AuthPage = ({ onDismiss }: { onDismiss: () => void }) => {
   const [emailMode, setEmailMode] = useState(false);
-  const [authMode, setAuthMode] = useState<'signup' | 'login'>('signup');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isAnimating, setIsAnimating] = useState(false);
@@ -30,40 +29,34 @@ const AuthPage = ({ onDismiss }: { onDismiss: () => void }) => {
     setIsAnimating(true);
     setError('');
     try {
-      if (authMode === 'signup') {
-        await signUpWithEmailAndPassword(email, password);
+      // Optimistically try to sign up the user. This handles new users.
+      await signUpWithEmailAndPassword(email, password);
+      // If successful, onAuthStateChanged handles the rest.
+    } catch (signUpError: any) {
+      // If it fails because the email is already in use...
+      if (signUpError.code === 'auth/email-already-in-use') {
+        try {
+          // ...then we know they are an existing user, so we sign them in.
+          await signInWithEmailAndPassword(email, password);
+        } catch (signInError: any) {
+          // If sign-in fails, it's almost certainly a wrong password.
+          if (signInError.code === 'auth/wrong-password' || signInError.code === 'auth/invalid-credential') {
+            setError('Incorrect password for this email. Please try again.');
+          } else {
+            setError('An unexpected error occurred during sign-in.');
+          }
+          setIsAnimating(false);
+        }
+      } else if (signUpError.code === 'auth/weak-password') {
+        // Handle other specific sign-up errors, like a weak password.
+        setError('Password should be at least 6 characters.');
+        setIsAnimating(false);
       } else {
-        await signInWithEmailAndPassword(email, password);
+        // Handle any other unexpected errors during the process.
+        setError('An unexpected error occurred. Please try again.');
+        setIsAnimating(false);
       }
-      // onAuthStateChanged will handle closing the modal and updating the user state.
-    } catch (err: any) {
-      console.error(err);
-      switch (err.code) {
-        case 'auth/email-already-in-use':
-          setError('This email is already in use. Try signing in.');
-          setAuthMode('login');
-          break;
-        case 'auth/weak-password':
-          setError('Password should be at least 6 characters.');
-          break;
-        case 'auth/user-not-found':
-        case 'auth/wrong-password':
-        case 'auth/invalid-credential':
-          setError('Invalid email or password. Please try again.');
-          break;
-        default:
-          setError('An unexpected error occurred. Please try again.');
-          break;
-      }
-      setIsAnimating(false);
     }
-  };
-
-  const toggleAuthMode = () => {
-    setAuthMode(prev => prev === 'signup' ? 'login' : 'signup');
-    setError('');
-    setEmail('');
-    setPassword('');
   };
 
   return (
@@ -85,11 +78,11 @@ const AuthPage = ({ onDismiss }: { onDismiss: () => void }) => {
           </div>
           
           <p className="text-slate-600 font-medium mb-2 whitespace-pre-line">
-            {authMode === 'signup' ? "You’re already here.\nSign up to keep this space." : "Welcome back.\nSign in to continue."}
+            Save your progress
           </p>
 
           <p className="text-xs text-slate-400 leading-relaxed max-w-[85%] mx-auto">
-            Access your drafts from any device. Nothing else changes.
+            Create an account or sign in to keep your draft and access it from any device.
           </p>
         </div>
 
@@ -137,7 +130,7 @@ const AuthPage = ({ onDismiss }: { onDismiss: () => void }) => {
               />
               <input
                 type="password"
-                placeholder={authMode === 'signup' ? 'Set a password' : 'Password'}
+                placeholder="Password (6+ characters)"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 className="w-full bg-slate-50 border border-slate-200 text-slate-900 text-sm rounded-xl focus:ring-1 focus:ring-slate-300 focus:border-slate-300 block p-3 outline-none"
@@ -149,7 +142,7 @@ const AuthPage = ({ onDismiss }: { onDismiss: () => void }) => {
                   disabled={isAnimating}
                   className="flex-1 bg-slate-800 hover:bg-slate-700 text-white font-medium py-3 rounded-xl transition-colors text-sm shadow-md shadow-slate-200 flex justify-center items-center disabled:opacity-50"
                 >
-                  {isAnimating && emailMode ? (authMode === 'signup' ? 'Saving...' : 'Signing in...') : (authMode === 'signup' ? 'Save Progress' : 'Sign In')}
+                  {isAnimating && emailMode ? 'Saving...' : 'Save Progress'}
                 </button>
                 <button
                   type="button"
@@ -160,18 +153,6 @@ const AuthPage = ({ onDismiss }: { onDismiss: () => void }) => {
                   <X size={18} />
                 </button>
               </div>
-               <p className="text-center text-xs text-slate-500 pt-2">
-                {authMode === 'signup' ? 'Already have an account?' : "Don't have an account?"}
-                {' '}
-                <button
-                  type="button"
-                  onClick={toggleAuthMode}
-                  className="font-medium text-slate-700 hover:underline focus:outline-none"
-                  disabled={isAnimating}
-                >
-                  {authMode === 'signup' ? 'Sign In' : 'Sign Up'}
-                </button>
-              </p>
             </form>
           )}
         </div>
