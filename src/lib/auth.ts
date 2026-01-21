@@ -1,6 +1,6 @@
 import { GoogleAuthProvider, signInWithPopup, signOut, createUserWithEmailAndPassword, onAuthStateChanged } from "firebase/auth";
 import { auth } from "./firebase";
-import { User } from "@/types/user";
+import type { User } from "@/types/user";
 
 export function onAuth(callback: (user: User) => void) {
   return onAuthStateChanged(auth, (user) => {

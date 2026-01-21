@@ -16,7 +16,7 @@ const AuthPage = ({ onDismiss, onLoginSuccess }: { onDismiss: () => void, onLogi
     setError('');
     try {
       await signInWithGoogle();
-      onLoginSuccess();
+      // onAuthStateChanged will handle the rest, including calling onLoginSuccess.
     } catch (err: any) {
       console.error(err);
       setError('Failed to sign in with Google.');
@@ -30,7 +30,7 @@ const AuthPage = ({ onDismiss, onLoginSuccess }: { onDismiss: () => void, onLogi
     setError('');
     try {
       await signUpWithEmailAndPassword(email, password);
-      onLoginSuccess();
+      // onAuthStateChanged will handle the rest, including calling onLoginSuccess.
     } catch (err: any) {
       console.error(err);
       if (err.code === 'auth/email-already-in-use') {
@@ -128,7 +128,7 @@ const AuthPage = ({ onDismiss, onLoginSuccess }: { onDismiss: () => void, onLogi
                   disabled={isAnimating}
                   className="flex-1 bg-slate-800 hover:bg-slate-700 text-white font-medium py-3 rounded-xl transition-colors text-sm shadow-md shadow-slate-200 flex justify-center items-center disabled:opacity-50"
                 >
-                  {isAnimating ? "Saving..." : "Save Progress"}
+                  {isAnimating && emailMode ? "Saving..." : "Save Progress"}
                 </button>
                 <button
                   type="button"

@@ -5,7 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { Lock, Cloud, CloudOff } from "lucide-react";
 import { onAuth, logout } from "@/lib/auth";
 import { saveDraft, loadDraft } from "@/lib/firestore";
-import { User } from "@/types/user";
+import type { User } from "@/types/user";
 import AuthPage from "@/components/AuthPage";
 
 export default function Editor() {
@@ -75,9 +75,10 @@ export default function Editor() {
     }
     
     // If we get here, it means the text change was initiated by the user, not by initial data load.
-    setIsSaving(true);
     const handler = setTimeout(() => {
       if (user) {
+        // User is logged in, save to Firestore
+        setIsSaving(true);
         saveDraft(user.uid, text)
           .then(() => {
             // If a cloud save is successful, we can safely remove any lingering guest draft.
@@ -91,6 +92,8 @@ export default function Editor() {
           })
           .finally(() => setIsSaving(false));
       } else {
+        // User is a guest, save to localStorage
+        setIsSaving(true);
         localStorage.setItem("draft_guest", text);
         setIsSaving(false);
       }
