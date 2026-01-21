@@ -2,10 +2,11 @@
 
 import React, { useState } from 'react';
 import { Mail, X, ShieldCheck } from 'lucide-react';
-import { signInWithGoogle, signUpWithEmailAndPassword } from '@/lib/auth';
+import { signInWithGoogle, signUpWithEmailAndPassword, signInWithEmailAndPassword } from '@/lib/auth';
 
 const AuthPage = ({ onDismiss }: { onDismiss: () => void }) => {
   const [emailMode, setEmailMode] = useState(false);
+  const [authMode, setAuthMode] = useState<'signup' | 'login'>('signup');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isAnimating, setIsAnimating] = useState(false);
@@ -24,24 +25,45 @@ const AuthPage = ({ onDismiss }: { onDismiss: () => void }) => {
     }
   };
   
-  const handleEmailSignUp = async (e: React.FormEvent) => {
+  const handleEmailAuth = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsAnimating(true);
     setError('');
     try {
-      await signUpWithEmailAndPassword(email, password);
+      if (authMode === 'signup') {
+        await signUpWithEmailAndPassword(email, password);
+      } else {
+        await signInWithEmailAndPassword(email, password);
+      }
       // onAuthStateChanged will handle closing the modal and updating the user state.
     } catch (err: any) {
       console.error(err);
-      if (err.code === 'auth/email-already-in-use') {
-        setError('This email is already in use. Try signing in.');
-      } else if (err.code === 'auth/weak-password') {
-        setError('Password should be at least 6 characters.');
-      } else {
-        setError('Failed to create an account.');
+      switch (err.code) {
+        case 'auth/email-already-in-use':
+          setError('This email is already in use. Try signing in.');
+          setAuthMode('login');
+          break;
+        case 'auth/weak-password':
+          setError('Password should be at least 6 characters.');
+          break;
+        case 'auth/user-not-found':
+        case 'auth/wrong-password':
+        case 'auth/invalid-credential':
+          setError('Invalid email or password. Please try again.');
+          break;
+        default:
+          setError('An unexpected error occurred. Please try again.');
+          break;
       }
       setIsAnimating(false);
     }
+  };
+
+  const toggleAuthMode = () => {
+    setAuthMode(prev => prev === 'signup' ? 'login' : 'signup');
+    setError('');
+    setEmail('');
+    setPassword('');
   };
 
   return (
@@ -62,9 +84,8 @@ const AuthPage = ({ onDismiss }: { onDismiss: () => void }) => {
              <ShieldCheck size={20} strokeWidth={2} />
           </div>
           
-          <p className="text-slate-600 font-medium mb-2">
-            You’re already here. <br/>
-            Sign in only if you want to keep this space.
+          <p className="text-slate-600 font-medium mb-2 whitespace-pre-line">
+            {authMode === 'signup' ? "You’re already here.\nSign up to keep this space." : "Welcome back.\nSign in to continue."}
           </p>
 
           <p className="text-xs text-slate-400 leading-relaxed max-w-[85%] mx-auto">
@@ -90,7 +111,7 @@ const AuthPage = ({ onDismiss }: { onDismiss: () => void }) => {
                   <path fill="currentColor" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.84z" />
                   <path fill="currentColor" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
                 </svg>
-                <span className="font-medium text-sm">Save with Google</span>
+                <span className="font-medium text-sm">Continue with Google</span>
               </>
             )}
           </button>
@@ -102,10 +123,10 @@ const AuthPage = ({ onDismiss }: { onDismiss: () => void }) => {
               className="w-full bg-transparent hover:bg-slate-50 text-slate-500 hover:text-slate-700 py-3.5 px-6 rounded-xl flex items-center justify-center gap-3 transition-all duration-200 text-sm disabled:opacity-50"
             >
               <Mail size={18} />
-              <span className="font-medium">Save with Email</span>
+              <span className="font-medium">Continue with Email</span>
             </button>
           ) : (
-            <form onSubmit={handleEmailSignUp} className="space-y-3 pt-2 animate-in fade-in slide-in-from-top-1 duration-300">
+            <form onSubmit={handleEmailAuth} className="space-y-3 pt-2 animate-in fade-in slide-in-from-top-1 duration-300">
               <input
                 type="email"
                 placeholder="Email address"
@@ -116,7 +137,7 @@ const AuthPage = ({ onDismiss }: { onDismiss: () => void }) => {
               />
               <input
                 type="password"
-                placeholder="Set a password"
+                placeholder={authMode === 'signup' ? 'Set a password' : 'Password'}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 className="w-full bg-slate-50 border border-slate-200 text-slate-900 text-sm rounded-xl focus:ring-1 focus:ring-slate-300 focus:border-slate-300 block p-3 outline-none"
@@ -128,7 +149,7 @@ const AuthPage = ({ onDismiss }: { onDismiss: () => void }) => {
                   disabled={isAnimating}
                   className="flex-1 bg-slate-800 hover:bg-slate-700 text-white font-medium py-3 rounded-xl transition-colors text-sm shadow-md shadow-slate-200 flex justify-center items-center disabled:opacity-50"
                 >
-                  {isAnimating && emailMode ? "Saving..." : "Save Progress"}
+                  {isAnimating && emailMode ? (authMode === 'signup' ? 'Saving...' : 'Signing in...') : (authMode === 'signup' ? 'Save Progress' : 'Sign In')}
                 </button>
                 <button
                   type="button"
@@ -139,6 +160,18 @@ const AuthPage = ({ onDismiss }: { onDismiss: () => void }) => {
                   <X size={18} />
                 </button>
               </div>
+               <p className="text-center text-xs text-slate-500 pt-2">
+                {authMode === 'signup' ? 'Already have an account?' : "Don't have an account?"}
+                {' '}
+                <button
+                  type="button"
+                  onClick={toggleAuthMode}
+                  className="font-medium text-slate-700 hover:underline focus:outline-none"
+                  disabled={isAnimating}
+                >
+                  {authMode === 'signup' ? 'Sign In' : 'Sign Up'}
+                </button>
+              </p>
             </form>
           )}
         </div>
