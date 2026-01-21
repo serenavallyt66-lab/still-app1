@@ -12,7 +12,7 @@ import type { User } from "@/types/user";
 export function onAuth(callback: (user: User) => void) {
   return onAuthStateChanged(auth, (user) => {
     if (user) {
-      callback({ uid: user.uid, email: user.email! });
+      callback({ uid: user.uid, email: user.email || "" });
     } else {
       callback(null);
     }
