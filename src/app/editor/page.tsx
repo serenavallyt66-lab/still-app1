@@ -55,16 +55,17 @@ export default function EditorPage({
 
       if (user) {
         if (guestDraft && guestDraft.trim().length > 0 && !alreadyMigrated) {
-          setText(guestDraft);
           setSaveState("saving");
           await saveDraft(user.uid, guestDraft);
           localStorage.setItem("guest_migrated", "true");
           localStorage.removeItem("draft_guest");
+          const cloudDraft = await loadDraft(user.uid);
+          setText(cloudDraft || "");
           setSaveState("saved");
         } else {
           const cloudDraft = await loadDraft(user.uid);
           setText(cloudDraft || "");
-          setSaveState("idle"); 
+          setSaveState("idle");
         }
       } else {
         setText(guestDraft || "");
@@ -86,7 +87,7 @@ export default function EditorPage({
       setSaveState("saving");
     }
   };
-  
+
   // Debounced save to Firestore for logged-in users
   useEffect(() => {
     if (!isMounted.current || !user || saveState !== 'saving') {
@@ -102,7 +103,7 @@ export default function EditorPage({
     return () => {
       clearTimeout(handler);
     };
-  }, [text, user, saveState]); 
+  }, [text, user, saveState]);
 
   // Local-only save for guests
   useEffect(() => {
@@ -137,7 +138,7 @@ export default function EditorPage({
     <div className="min-h-screen bg-[#fcfbf9] text-stone-800 font-serif px-6 md:px-12 py-10 transition-colors duration-500">
       <div className="absolute top-6 left-6 z-10">
         <div className="flex items-center gap-3 select-none">
-          <Image src="/logo.svg" width={26} height={26} alt="Still Logo Mark" />
+          <Image src="/logo.svg" width={28} height={28} alt="Still Logo Mark" />
           <span className="font-serif text-[15px] tracking-tight text-stone-800">
             Still
           </span>
