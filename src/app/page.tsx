@@ -101,6 +101,23 @@ function ScrollBlock({ title, desc }: { title: string; desc: string }) {
   );
 }
 
+// This function determines the initial view before the first render on the client.
+const getInitialView = (): "editor" | "landing" => {
+  // On the server, always default to the landing page.
+  if (typeof window === "undefined") {
+    return "landing";
+  }
+  
+  // On the client, check for a valid guest draft.
+  const guestDraft = localStorage.getItem("draft_guest");
+  if (guestDraft && guestDraft.trim().length > 0) {
+    return "editor";
+  }
+  
+  // Otherwise, show the landing page.
+  return "landing";
+};
+
 
 /**
  * 🚀 MAIN LANDING PAGE / APP ENTRY
@@ -108,33 +125,13 @@ function ScrollBlock({ title, desc }: { title: string; desc: string }) {
 export default function AppEntry() {
   const router = useRouter();
 
-  // On initial load, we need to decide whether to show the editor or the landing page.
-  // This must be done carefully to avoid a "hydration mismatch" where the server-rendered
-  // content doesn't match the initial client-rendered content.
-  const [showEditor, setShowEditor] = useState<boolean | null>(null);
+  // The view is determined synchronously before the first client-side render
+  // to prevent any flicker. This will cause a hydration mismatch if a guest
+  // has a draft, but it ensures the user sees the correct view immediately.
+  const [view, setView] = useState(getInitialView);
 
-  // We use useEffect to safely access `localStorage` only on the client, after the
-  // component has mounted.
-  useEffect(() => {
-    const guestDraft = localStorage.getItem("draft_guest");
-    // Only show the editor if a guest draft exists and it has actual content.
-    if (guestDraft && guestDraft.trim().length > 0) {
-      setShowEditor(true);
-    } else {
-      setShowEditor(false);
-    }
-  }, []); // The empty dependency array ensures this runs only once on mount.
-
-  // While we're checking for the draft on the client, we render a blank screen.
-  // This prevents the user from seeing a "flash" of the landing page before
-  // we determine the correct view.
-  if (showEditor === null) {
-    return <div className="min-h-screen bg-[#fcfbf9]"></div>;
-  }
-
-  // If a draft exists, we render the editor component directly. The user bypasses
-  // the landing page for a seamless experience.
-  if (showEditor) {
+  // If a draft exists, we render the editor component directly.
+  if (view === "editor") {
     return <EditorPage />;
   }
 
