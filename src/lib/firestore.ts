@@ -1,17 +1,30 @@
 import { db } from "./firebase";
-import { doc, setDoc, getDoc, serverTimestamp } from "firebase/firestore";
+import {
+  doc,
+  setDoc,
+  getDoc,
+  serverTimestamp,
+  updateDoc,
+} from "firebase/firestore";
 
 export async function saveDraft(uid: string, text: string) {
-  // Save the draft to a 'default' document within a 'drafts' subcollection.
   const draftRef = doc(db, "users", uid, "drafts", "default");
-  await setDoc(
-    draftRef,
-    {
+  const docSnap = await getDoc(draftRef);
+
+  if (docSnap.exists()) {
+    // Document exists, just update it.
+    await updateDoc(draftRef, {
       content: text,
       updatedAt: serverTimestamp(),
-    },
-    { merge: true } // Creates the doc if it doesn't exist, merges if it does.
-  );
+    });
+  } else {
+    // Document doesn't exist, create it with createdAt.
+    await setDoc(draftRef, {
+      content: text,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+  }
 }
 
 export async function loadDraft(uid: string) {
