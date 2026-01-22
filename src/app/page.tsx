@@ -123,16 +123,21 @@ const getInitialView = (): "editor" | "landing" => {
  * 🚀 MAIN LANDING PAGE / APP ENTRY
  */
 export default function AppEntry() {
-  const router = useRouter();
-
-  // The view is determined synchronously before the first client-side render
-  // to prevent any flicker. This will cause a hydration mismatch if a guest
-  // has a draft, but it ensures the user sees the correct view immediately.
   const [view, setView] = useState(getInitialView);
+  const [initialAuthOpen, setInitialAuthOpen] = useState(false);
 
-  // If a draft exists, we render the editor component directly.
+  const handleSignInClick = () => {
+    setInitialAuthOpen(true);
+    setView("editor");
+  };
+
+  // If a draft exists or user wants to write, render the editor component directly.
   if (view === "editor") {
-    return <EditorPage />;
+    return <EditorPage 
+             key={initialAuthOpen ? 'auth-open' : 'auth-closed'} 
+             initialAuthModalOpen={initialAuthOpen} 
+             onAuthModalDismiss={() => setInitialAuthOpen(false)}
+           />;
   }
 
   // If no valid draft exists, we show the main landing page.
@@ -162,7 +167,7 @@ export default function AppEntry() {
           {/* Primary CTA */}
           <div className="flex flex-col sm:flex-row justify-center items-center gap-8 pt-6">
             <button
-              onClick={() => router.push("/editor")}
+              onClick={() => setView("editor")}
               className="group font-sans text-stone-800 border-b border-stone-800
                          pb-1 flex items-center gap-2 hover:text-stone-500
                          hover:border-stone-400 transition-all duration-300"
@@ -175,7 +180,7 @@ export default function AppEntry() {
 
             <button 
               className="text-sm font-sans text-stone-400 hover:text-stone-600 transition-colors"
-              onClick={() => router.push("/editor?auth=true")}
+              onClick={handleSignInClick}
             >
               Sign in to save privately
             </button>

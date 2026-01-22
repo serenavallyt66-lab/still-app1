@@ -1,29 +1,38 @@
 "use client";
 
 import { useEffect, useState, useRef } from "react";
-import { useSearchParams, useRouter } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { Lock, Cloud, CloudOff } from "lucide-react";
 import { onAuth, logout } from "@/lib/auth";
 import { saveDraft, loadDraft } from "@/lib/firestore";
 import type { User } from "@/types/user";
 import AuthPage from "@/components/AuthPage";
 
-export default function Editor() {
+export default function EditorPage({ 
+  initialAuthModalOpen = false,
+  onAuthModalDismiss
+}: {
+  initialAuthModalOpen?: boolean;
+  onAuthModalDismiss?: () => void;
+}) {
   const [user, setUser] = useState<User | undefined>(undefined); // undefined: auth state is loading
   const [text, setText] = useState("");
-  const [isAuthModalOpen, setAuthModalOpen] = useState(false);
+  const [isAuthModalOpen, setAuthModalOpen] = useState(initialAuthModalOpen);
   const [isSaving, setIsSaving] = useState(false);
-  const searchParams = useSearchParams();
   const isMounted = useRef(false);
   const router = useRouter();
 
-  // Open auth modal if query param is present
+  // Handle parent component's request to open modal
   useEffect(() => {
-    if (searchParams.get("auth") === "true" && user === null) {
+    if(initialAuthModalOpen) {
       setAuthModalOpen(true);
     }
-  }, [searchParams, user]);
+  }, [initialAuthModalOpen]);
 
+  const handleDismissModal = () => {
+    setAuthModalOpen(false);
+    onAuthModalDismiss?.();
+  };
 
   // Listen for auth state changes to be the single source of truth
   useEffect(() => {
@@ -31,7 +40,7 @@ export default function Editor() {
       setUser(newUser);
       // If we get a user object, it means login was successful.
       if (newUser) {
-        setAuthModalOpen(false);
+        handleDismissModal();
       }
     });
     return () => unsubscribe();
@@ -61,11 +70,13 @@ export default function Editor() {
           
           // If the cloud draft is empty, the user should be on the landing page.
           if (!cloudDraft || cloudDraft.trim().length === 0) {
-              router.push('/');
-              return;
+              // This case should now be handled by the parent component logic, but as a fallback:
+              // window.location.href = '/'; 
+              // A hard redirect is safer if this component is ever rendered standalone.
+              // For now, we assume parent component handles the view.
           }
 
-          setText(cloudDraft);
+          setText(cloudDraft || '');
         }
       } else {
         // User is logged OUT (is a guest)
@@ -128,7 +139,7 @@ export default function Editor() {
       
       {isAuthModalOpen && (
         <AuthPage
-          onDismiss={() => setAuthModalOpen(false)}
+          onDismiss={handleDismissModal}
         />
       )}
 
