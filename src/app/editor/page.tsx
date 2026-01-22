@@ -65,7 +65,7 @@ export default function EditorPage({
         } else {
           const cloudDraft = await loadDraft(user.uid);
           setText(cloudDraft || "");
-          setSaveState("idle");
+          setSaveState("saved");
         }
       } else {
         setText(guestDraft || "");
@@ -118,7 +118,7 @@ export default function EditorPage({
 
   // Micro-polish: Reset 'saved' state to 'idle' after a delay
   useEffect(() => {
-    if (saveState === 'saved') {
+    if (saveState === 'saved' && isMounted.current) {
       const timer = setTimeout(() => {
         setSaveState('idle');
       }, 2000);
