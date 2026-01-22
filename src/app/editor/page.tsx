@@ -65,6 +65,8 @@ export default function EditorPage({
           // Priority #1: If a cloud draft exists, use it.
           setText(cloudDraft);
           setSaveState("saved"); // The loaded draft is secure.
+          // A cloud draft exists, so any local guest draft is now irrelevant and should be discarded.
+          localStorage.removeItem("draft_guest");
         } else {
           // Priority #2: No cloud draft? Check for a one-time guest migration.
           const guestDraft = localStorage.getItem("draft_guest");

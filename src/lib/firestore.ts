@@ -28,8 +28,10 @@ export async function saveDraft(uid: string, text: string) {
 }
 
 export async function loadDraft(uid: string) {
-  // Load the draft from the 'default' document within the 'drafts' subcollection.
   const draftRef = doc(db, "users", uid, "drafts", "default");
   const snap = await getDoc(draftRef);
-  return snap.exists() ? snap.data().content || "" : "";
+  if (!snap.exists()) {
+    return null; // Return null if the document does not exist.
+  }
+  return snap.data().content || ""; // Return content, or empty string if content field is missing/falsy.
 }
