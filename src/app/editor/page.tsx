@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useEffect, useState, useRef } from "react";
 import { Lock, Cloud, CloudOff } from "lucide-react";
 import { onAuth, logout } from "@/lib/auth";
@@ -55,6 +56,7 @@ export default function EditorPage({
       if (user) {
         if (guestDraft && guestDraft.trim().length > 0 && !alreadyMigrated) {
           setText(guestDraft);
+          setSaveState("saving");
           await saveDraft(user.uid, guestDraft);
           localStorage.setItem("guest_migrated", "true");
           localStorage.removeItem("draft_guest");
@@ -133,6 +135,15 @@ export default function EditorPage({
 
   return (
     <div className="min-h-screen bg-[#fcfbf9] text-stone-800 font-serif px-6 md:px-12 py-10 transition-colors duration-500">
+      <div className="absolute top-6 left-6 z-10">
+        <div className="flex items-center gap-3 select-none">
+          <Image src="/logo.svg" width={26} height={26} alt="Still Logo Mark" />
+          <span className="font-serif text-[15px] tracking-tight text-stone-800">
+            Still
+          </span>
+        </div>
+      </div>
+      
       {isAuthModalOpen && <AuthPage onDismiss={handleDismissModal} />}
 
       <div className="max-w-2xl mx-auto flex justify-between items-center mb-10 text-[13px] md:text-xs font-sans tracking-wide text-stone-400 select-none">
@@ -146,12 +157,12 @@ export default function EditorPage({
                   <Cloud size={14} className="animate-pulse" />
                   <span className="text-stone-500 font-medium">Saving...</span>
                 </>
-              ) : (
+              ) : saveState === 'saved' ? (
                 <>
                   <Cloud size={14} className="text-emerald-600/70" />
                   <span className="text-stone-500 font-medium">Draft secured</span>
                 </>
-              )}
+              ) : null}
             </>
           ) : (
             <>
