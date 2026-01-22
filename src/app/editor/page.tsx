@@ -50,27 +50,38 @@ export default function EditorPage({
 
     const initialize = async () => {
       isMounted.current = false;
-      const guestDraft = localStorage.getItem("draft_guest");
-      const alreadyMigrated = localStorage.getItem("guest_migrated");
-
-      if (user) {
-        if (guestDraft && guestDraft.trim().length > 0 && !alreadyMigrated) {
-          setSaveState("saving");
-          await saveDraft(user.uid, guestDraft);
-          localStorage.setItem("guest_migrated", "true");
-          localStorage.removeItem("draft_guest");
-          const cloudDraft = await loadDraft(user.uid);
-          setText(cloudDraft || "");
-          setSaveState("saved");
+      
+      if (user) { // A user is logged in
+        const cloudDraft = await loadDraft(user.uid);
+        
+        if (cloudDraft) {
+          // Priority #1: If a cloud draft exists, use it.
+          setText(cloudDraft);
+          setSaveState("saved"); // The loaded draft is secure.
         } else {
-          const cloudDraft = await loadDraft(user.uid);
-          setText(cloudDraft || "");
-          setSaveState("saved");
+          // Priority #2: No cloud draft? Check for a one-time guest migration.
+          const guestDraft = localStorage.getItem("draft_guest");
+          const alreadyMigrated = localStorage.getItem("guest_migrated");
+    
+          if (guestDraft && !alreadyMigrated) {
+            setSaveState("saving");
+            await saveDraft(user.uid, guestDraft); // Migrate guest draft to cloud
+            setText(guestDraft); // Set UI state
+            localStorage.setItem("guest_migrated", "true"); // Mark as migrated
+            localStorage.removeItem("draft_guest"); // Clean up guest draft
+            setSaveState("saved");
+          } else {
+            // New user with no drafts anywhere.
+            setText("");
+            setSaveState("idle");
+          }
         }
-      } else {
+      } else { // Guest user
+        const guestDraft = localStorage.getItem("draft_guest");
         setText(guestDraft || "");
         setSaveState("idle");
       }
+
       setTimeout(() => {
         isMounted.current = true;
       }, 50);
