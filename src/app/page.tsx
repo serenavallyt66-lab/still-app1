@@ -1,7 +1,6 @@
 'use client';
 import React, { useState, useEffect, useRef } from "react";
 import { ArrowRight, Feather } from "lucide-react";
-import { useRouter } from "next/navigation";
 import EditorPage from "./editor/page";
 import Link from "next/link";
 
@@ -101,30 +100,21 @@ function ScrollBlock({ title, desc }: { title: string; desc: string }) {
   );
 }
 
-// This function determines the initial view before the first render on the client.
-const getInitialView = (): "editor" | "landing" => {
-  // On the server, always default to the landing page.
-  if (typeof window === "undefined") {
-    return "landing";
-  }
-  
-  // On the client, check for a valid guest draft.
-  const guestDraft = localStorage.getItem("draft_guest");
-  if (guestDraft && guestDraft.trim().length > 0) {
-    return "editor";
-  }
-  
-  // Otherwise, show the landing page.
-  return "landing";
-};
-
-
 /**
  * 🚀 MAIN LANDING PAGE / APP ENTRY
  */
 export default function AppEntry() {
-  const [view, setView] = useState(getInitialView);
+  // Default to "landing" to ensure server and client initial render match, preventing hydration errors.
+  const [view, setView] = useState<'landing' | 'editor'>('landing');
   const [initialAuthOpen, setInitialAuthOpen] = useState(false);
+
+  // After mounting on the client, check for a guest draft and switch views if needed.
+  useEffect(() => {
+    const guestDraft = localStorage.getItem("draft_guest");
+    if (guestDraft && guestDraft.trim().length > 0) {
+      setView("editor");
+    }
+  }, []); // Empty array ensures this runs only once after the initial render.
 
   const handleSignInClick = () => {
     setInitialAuthOpen(true);
