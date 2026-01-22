@@ -98,7 +98,12 @@ export default function EditorPage({
     // --- LOGGED-IN SAVING (DEBOUNCED) ---
     const handler = setTimeout(() => {
       setIsSaving(true);
-      saveDraft(user.uid, text)
+      
+      const savePromise = saveDraft(user.uid, text);
+      // Ensure the saving indicator is visible for at least 500ms to avoid flickering
+      const minDisplayTimePromise = new Promise(resolve => setTimeout(resolve, 500));
+
+      Promise.all([savePromise, minDisplayTimePromise])
         .catch((error) => {
           console.error("Error saving draft:", error);
         })
