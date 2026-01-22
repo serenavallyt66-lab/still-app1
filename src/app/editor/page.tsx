@@ -1,6 +1,5 @@
 "use client";
 
-import Image from "next/image";
 import { useEffect, useState, useRef } from "react";
 import { Lock, Cloud, CloudOff } from "lucide-react";
 import { onAuth, logout } from "@/lib/auth";
@@ -36,7 +35,15 @@ export default function EditorPage({
 
   useEffect(() => {
     const unsubscribe = onAuth((newUser) => {
-      setUser(newUser);
+      // Explicitly handle logout: reset state for a clean slate
+      if (newUser === null) {
+        setUser(null);
+        setText(""); 
+        setSaveState("idle");
+      } else {
+        setUser(newUser);
+      }
+      // Close auth modal on successful login/signup
       if (newUser) {
         handleDismissModal();
       }
@@ -46,7 +53,7 @@ export default function EditorPage({
 
   // Effect for loading data and handling one-time migration
   useEffect(() => {
-    if (user === undefined) return;
+    if (user === undefined) return; // Don't run on initial undefined state
 
     const initialize = async () => {
       isMounted.current = false;
@@ -54,7 +61,7 @@ export default function EditorPage({
       if (user) { // A user is logged in
         const cloudDraft = await loadDraft(user.uid);
         
-        if (cloudDraft) {
+        if (cloudDraft !== null) {
           // Priority #1: If a cloud draft exists, use it.
           setText(cloudDraft);
           setSaveState("saved"); // The loaded draft is secure.
@@ -64,14 +71,13 @@ export default function EditorPage({
           const alreadyMigrated = localStorage.getItem("guest_migrated");
     
           if (guestDraft && !alreadyMigrated) {
-            setSaveState("saving");
             await saveDraft(user.uid, guestDraft); // Migrate guest draft to cloud
             setText(guestDraft); // Set UI state
             localStorage.setItem("guest_migrated", "true"); // Mark as migrated
             localStorage.removeItem("draft_guest"); // Clean up guest draft
-            setSaveState("saved");
+            setSaveState("saved"); // Migrated draft is now secure
           } else {
-            // New user with no drafts anywhere.
+            // New user with no drafts, or a returning user who cleared their first draft.
             setText("");
             setSaveState("idle");
           }
@@ -82,6 +88,7 @@ export default function EditorPage({
         setSaveState("idle");
       }
 
+      // Allow effects to run after initialization is complete
       setTimeout(() => {
         isMounted.current = true;
       }, 50);
@@ -92,19 +99,24 @@ export default function EditorPage({
 
   // --- TEXT CHANGE & SAVING LOGIC ---
 
+  // 1. On typing, immediately show "Saving..."
   const handleTextChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setText(e.target.value);
     if (user) {
-      setSaveState("saving");
+      setSaveState("saving"); // Instant feedback
     }
   };
 
-  // Debounced save to Firestore for logged-in users
+  // 2. Debounced save to Firestore for logged-in users
   useEffect(() => {
-    if (!isMounted.current || !user || saveState !== 'saving') {
+    // Only run this logic for logged-in users.
+    if (!user) return;
+    
+    // We only want to trigger a save if the user has made an edit.
+    if (saveState !== 'saving') {
       return;
     }
-    
+
     const handler = setTimeout(() => {
       saveDraft(user.uid, text).then(() => {
         setSaveState("saved");
@@ -114,9 +126,9 @@ export default function EditorPage({
     return () => {
       clearTimeout(handler);
     };
-  }, [text, user, saveState]);
+  }, [text, user, saveState]); // Re-runs when text changes, correctly debouncing.
 
-  // Local-only save for guests
+  // 3. Local-only save for guests
   useEffect(() => {
     if (user || !isMounted.current) return;
 
@@ -127,8 +139,9 @@ export default function EditorPage({
     }
   }, [text, user]);
 
-  // Micro-polish: Reset 'saved' state to 'idle' after a delay
+  // 4. Micro-polish: Reset 'saved' state to 'idle' after a delay
   useEffect(() => {
+    // Only run this polish effect if the change was due to an active save, not initial load.
     if (saveState === 'saved' && isMounted.current) {
       const timer = setTimeout(() => {
         setSaveState('idle');
@@ -141,8 +154,7 @@ export default function EditorPage({
 
   const handleLogout = () => {
     logout();
-    setText("");
-    setSaveState("idle");
+    // The onAuth listener will handle the state reset.
   };
 
   return (
@@ -151,22 +163,23 @@ export default function EditorPage({
       {isAuthModalOpen && <AuthPage onDismiss={handleDismissModal} />}
 
       <div className="max-w-2xl mx-auto flex justify-between items-center mb-10 text-[13px] md:text-xs font-sans tracking-wide text-stone-400 select-none">
-        <span className="flex items-center gap-2 animate-fade-in">
+        <span className="flex items-center gap-2 animate-fade-in h-4">
           {user === undefined ? (
             <span className="w-4 h-4 border-2 border-stone-200 border-t-stone-400 rounded-full animate-spin" />
           ) : user ? (
             <>
-              {saveState === 'saving' ? (
+              {saveState === 'saving' && (
                 <>
                   <Cloud size={14} className="animate-pulse" />
                   <span className="text-stone-500 font-medium">Saving...</span>
                 </>
-              ) : saveState === 'saved' ? (
+              )}
+              {saveState === 'saved' && (
                 <>
                   <Cloud size={14} className="text-emerald-600/70" />
                   <span className="text-stone-500 font-medium">Draft secured</span>
                 </>
-              ) : null}
+              )}
             </>
           ) : (
             <>
