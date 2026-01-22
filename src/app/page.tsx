@@ -3,6 +3,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { ArrowRight, Feather } from "lucide-react";
 import { useRouter } from "next/navigation";
 import EditorPage from "./editor/page";
+import Link from "next/link";
 
 /**
  * 🧱 COMPONENTS: BRANDING
@@ -205,11 +206,18 @@ export default function AppEntry() {
       </section>
 
       {/* FOOTER */}
-      <footer className="text-center py-24 opacity-40 hover:opacity-100 transition-opacity duration-700">
-        <Feather className="w-5 h-5 mx-auto text-stone-400 mb-4" />
-        <p className="font-sans text-xs text-stone-500 tracking-widest uppercase">
-          Breathe · Write · Return
-        </p>
+      <footer className="text-center py-24 px-6">
+        <div className="opacity-40 hover:opacity-100 transition-opacity duration-700">
+          <Feather className="w-5 h-5 mx-auto text-stone-400 mb-4" />
+          <p className="font-sans text-xs text-stone-500 tracking-widest uppercase">
+            Breathe · Write · Return
+          </p>
+        </div>
+        <div className="text-xs text-stone-400 font-sans space-x-6 mt-8">
+            <Link href="/terms" className="hover:text-stone-600 transition-colors">Terms of Service</Link>
+            <span className="text-stone-300">·</span>
+            <Link href="/privacy" className="hover:text-stone-600 transition-colors">Privacy Policy</Link>
+        </div>
       </footer>
     </div>
   );
