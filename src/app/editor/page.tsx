@@ -76,12 +76,6 @@ export default function EditorPage({
           // This is a RETURNING user or a new user with no guest draft.
           // Load their content securely from the cloud.
           const cloudDraft = await loadDraft(user.uid);
-          if (!cloudDraft || cloudDraft.trim().length === 0) {
-            // If they have no cloud draft (e.g., deleted it or new account),
-            // and we didn't just migrate one, send them to the landing page.
-            router.push('/');
-            return;
-          }
           setText(cloudDraft || "");
         }
       } else {
@@ -109,8 +103,8 @@ export default function EditorPage({
 
     if (user) {
       // User is logged in, use debounced save to Firestore
-      setIsSaving(true);
       const handler = setTimeout(() => {
+        setIsSaving(true);
         saveDraft(user.uid, text)
           .catch((error) => {
             console.error("Error saving draft to Firestore:", error);
