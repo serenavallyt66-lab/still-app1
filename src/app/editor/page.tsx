@@ -57,34 +57,40 @@ export default function EditorPage({
       // This prevents the save effect from firing on this initial text change.
       isMounted.current = false;
       const guestDraft = localStorage.getItem("draft_guest");
+      const alreadyMigrated = localStorage.getItem("guest_migrated");
 
       if (user) {
-        // User just logged IN.
-        if (guestDraft && guestDraft.trim().length > 0) {
-          // A guest draft exists. Migrate it ONCE.
+        // User is logged IN.
+        // Check if there's a guest draft AND it has NOT been migrated before.
+        if (guestDraft && guestDraft.trim().length > 0 && !alreadyMigrated) {
+          // THIS IS A ONE-TIME MIGRATION for the very first login.
           // 1. Set the editor text immediately for responsiveness.
-          setText(guestDraft); 
+          setText(guestDraft);
           // 2. Save it to the cloud.
           await saveDraft(user.uid, guestDraft);
-          // 3. Clear the local guest draft.
+          // 3. Set the migration flag to prevent future overwrites.
+          localStorage.setItem("guest_migrated", "true");
+          // 4. Clear the local guest draft now that it's safe in the cloud.
           localStorage.removeItem("draft_guest");
         } else {
-          // No guest draft to migrate, just load from the cloud.
+          // This is a RETURNING user or a new user with no guest draft.
+          // Load their content securely from the cloud.
           const cloudDraft = await loadDraft(user.uid);
-           if (!cloudDraft || cloudDraft.trim().length === 0) {
-              // Redirect to landing if cloud draft is empty
-              router.push('/');
-              return;
-           }
-          setText(cloudDraft || '');
+          if (!cloudDraft || cloudDraft.trim().length === 0) {
+            // If they have no cloud draft (e.g., deleted it or new account),
+            // and we didn't just migrate one, send them to the landing page.
+            router.push('/');
+            return;
+          }
+          setText(cloudDraft || "");
         }
       } else {
         // User is a GUEST (or just logged out).
-        // On logout, text state is cleared by handleLogout, so this will load ""
-        // On initial load as guest, this will load the draft.
+        // On logout, the text state is cleared by `handleLogout`, so this loads "".
+        // On initial load as a guest, this loads the existing local draft.
         setText(guestDraft || "");
       }
-      
+
       // Use a timeout to ensure this runs after the state has been set and rendered.
       setTimeout(() => {
         isMounted.current = true;
