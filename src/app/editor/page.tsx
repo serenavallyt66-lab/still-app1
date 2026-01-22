@@ -136,14 +136,6 @@ export default function EditorPage({
 
   return (
     <div className="min-h-screen bg-[#fcfbf9] text-stone-800 font-serif px-6 md:px-12 py-10 transition-colors duration-500">
-      <div className="absolute top-6 left-6 z-10">
-        <div className="flex items-center gap-3 select-none">
-          <Image src="/logo.svg" width={28} height={28} alt="Still Logo Mark" />
-          <span className="font-serif text-[15px] tracking-tight text-stone-800">
-            Still
-          </span>
-        </div>
-      </div>
       
       {isAuthModalOpen && <AuthPage onDismiss={handleDismissModal} />}
 
