@@ -8,23 +8,22 @@ import { saveDraft, loadDraft } from "@/lib/firestore";
 import type { User } from "@/types/user";
 import AuthPage from "@/components/AuthPage";
 
-export default function EditorPage({ 
+export default function EditorPage({
   initialAuthModalOpen = false,
-  onAuthModalDismiss
+  onAuthModalDismiss,
 }: {
   initialAuthModalOpen?: boolean;
   onAuthModalDismiss?: () => void;
 }) {
-  const [user, setUser] = useState<User | undefined>(undefined); // undefined: auth state is loading
+  const [user, setUser] = useState<User | undefined>(undefined);
   const [text, setText] = useState("");
   const [isAuthModalOpen, setAuthModalOpen] = useState(initialAuthModalOpen);
   const [isSaving, setIsSaving] = useState(false);
   const isMounted = useRef(false);
   const router = useRouter();
 
-  // Handle parent component's request to open modal
   useEffect(() => {
-    if(initialAuthModalOpen) {
+    if (initialAuthModalOpen) {
       setAuthModalOpen(true);
     }
   }, [initialAuthModalOpen]);
@@ -34,11 +33,9 @@ export default function EditorPage({
     onAuthModalDismiss?.();
   };
 
-  // Listen for auth state changes to be the single source of truth
   useEffect(() => {
     const unsubscribe = onAuth((newUser) => {
       setUser(newUser);
-      // If we get a user object, it means login was successful.
       if (newUser) {
         handleDismissModal();
       }
@@ -46,101 +43,83 @@ export default function EditorPage({
     return () => unsubscribe();
   }, []);
 
-  // Effect to load initial data and handle guest->user migration
+  // Effect for loading data and handling one-time migration
   useEffect(() => {
-    if (user === undefined) {
-      return; // Auth state is still loading, do nothing.
-    }
+    if (user === undefined) return; // Wait for auth state to be determined
 
-    const initializeDraft = async () => {
-      // Mark that initial load is happening.
-      // This prevents the save effect from firing on this initial text change.
-      isMounted.current = false;
+    const initialize = async () => {
+      isMounted.current = false; // Prevent save effect from running on this initial load
       const guestDraft = localStorage.getItem("draft_guest");
       const alreadyMigrated = localStorage.getItem("guest_migrated");
 
       if (user) {
-        // User is logged IN.
-        // Check if there's a guest draft AND it has NOT been migrated before.
+        // User is logged in
         if (guestDraft && guestDraft.trim().length > 0 && !alreadyMigrated) {
-          // THIS IS A ONE-TIME MIGRATION for the very first login.
-          // 1. Set the editor text immediately for responsiveness.
-          setText(guestDraft);
-          // 2. Save it to the cloud.
-          await saveDraft(user.uid, guestDraft);
-          // 3. Set the migration flag to prevent future overwrites.
-          localStorage.setItem("guest_migrated", "true");
-          // 4. Clear the local guest draft now that it's safe in the cloud.
-          localStorage.removeItem("draft_guest");
+          // ONE-TIME MIGRATION: Guest draft exists and has never been migrated
+          setText(guestDraft); // Set text in UI immediately
+          await saveDraft(user.uid, guestDraft); // Save to cloud
+          localStorage.setItem("guest_migrated", "true"); // Mark as migrated
+          localStorage.removeItem("draft_guest"); // Clean up local draft
         } else {
-          // This is a RETURNING user or a new user with no guest draft.
-          // Load their content securely from the cloud.
+          // RETURNING USER: Load their draft from the cloud
           const cloudDraft = await loadDraft(user.uid);
           setText(cloudDraft || "");
         }
       } else {
-        // User is a GUEST (or just logged out).
-        // On logout, the text state is cleared by `handleLogout`, so this loads "".
-        // On initial load as a guest, this loads the existing local draft.
+        // GUEST: Load draft from local storage
         setText(guestDraft || "");
       }
-
-      // Use a timeout to ensure this runs after the state has been set and rendered.
+      // Allow saving effects to run after this initial setup is complete
       setTimeout(() => {
         isMounted.current = true;
       }, 50);
     };
 
-    initializeDraft();
-  }, [user, router]);
+    initialize();
+  }, [user]); // This effect runs only when auth state changes
 
-  // Save effect for any subsequent changes
+  // Effect for saving data (separated for clarity)
   useEffect(() => {
-    // Do not save on the very first render or during the initial data load.
+    // Do not run on the initial render/data load
     if (!isMounted.current) {
       return;
     }
 
-    if (user) {
-      // User is logged in, use debounced save to Firestore
-      const handler = setTimeout(() => {
-        setIsSaving(true);
-        saveDraft(user.uid, text)
-          .catch((error) => {
-            console.error("Error saving draft to Firestore:", error);
-          })
-          .finally(() => setIsSaving(false));
-      }, 1500); // 1.5-second debounce
-
-      return () => {
-        clearTimeout(handler);
-      };
-    } else {
-      // User is a guest. Save to localStorage immediately on text change.
-      if (text && text.trim().length > 0) {
+    // --- GUEST SAVING ---
+    if (!user) {
+      if (text.trim().length > 0) {
         localStorage.setItem("draft_guest", text);
       } else {
         localStorage.removeItem("draft_guest");
       }
+      return; // End here for guests
     }
-  }, [text, user]);
 
+    // --- LOGGED-IN SAVING (DEBOUNCED) ---
+    const handler = setTimeout(() => {
+      setIsSaving(true);
+      saveDraft(user.uid, text)
+        .catch((error) => {
+          console.error("Error saving draft:", error);
+        })
+        .finally(() => {
+          setIsSaving(false);
+        });
+    }, 1500); // 1.5-second debounce
+
+    return () => {
+      clearTimeout(handler);
+    };
+  }, [text, user]); // This effect runs when text or user changes
 
   const handleLogout = () => {
-    // Immediately clear the text state to prevent leaking logged-in data
-    // into the guest draft on the subsequent render cycle.
-    setText('');
+    setText(""); // Hard reset of text state on logout
     logout();
   };
 
   return (
     <div className="min-h-screen bg-[#fcfbf9] text-stone-800 font-serif px-6 md:px-12 py-10 transition-colors duration-500">
-      
-      {isAuthModalOpen && (
-        <AuthPage
-          onDismiss={handleDismissModal}
-        />
-      )}
+      {isAuthModalOpen && <AuthPage onDismiss={handleDismissModal} />}
 
       {/* TOP BAR */}
       <div className="max-w-2xl mx-auto flex justify-between items-center mb-10 text-[13px] md:text-xs font-sans tracking-wide text-stone-400 select-none">
@@ -149,13 +128,13 @@ export default function EditorPage({
             <span className="w-4 h-4 border-2 border-stone-200 border-t-stone-400 rounded-full animate-spin" />
           ) : user ? (
             isSaving ? (
-             <>
-               <Cloud size={14} className="animate-pulse" /> 
-               <span className="text-stone-500 font-medium">Saving...</span>
-             </>
+              <>
+                <Cloud size={14} className="animate-pulse" />
+                <span className="text-stone-500 font-medium">Saving...</span>
+              </>
             ) : (
               <>
-                <Cloud size={14} className="text-emerald-600/70" /> 
+                <Cloud size={14} className="text-emerald-600/70" />
                 <span className="text-stone-500 font-medium">
                   Draft secured
                 </span>
@@ -163,7 +142,7 @@ export default function EditorPage({
             )
           ) : (
             <>
-              <CloudOff size={14} /> 
+              <CloudOff size={14} />
               <span className="text-stone-500 font-medium">Local only</span>
             </>
           )}
@@ -215,9 +194,9 @@ export default function EditorPage({
         {/* SOFT GUIDANCE */}
         {text.length > 0 && text.length < 400 && (
           <div className="mt-6 flex flex-col items-start gap-4 animate-in fade-in slide-in-from-bottom-2 duration-700">
-             <p className="text-[14px] md:text-xs text-stone-400 font-sans italic">
-               You don’t have to finish this.
-             </p>
+            <p className="text-[14px] md:text-xs text-stone-400 font-sans italic">
+              You don’t have to finish this.
+            </p>
 
             {/* CONVERSION MOMENT */}
             {!user && text.length > 120 && (
