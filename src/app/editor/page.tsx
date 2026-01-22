@@ -81,21 +81,17 @@ export default function Editor() {
     initializeDraft();
   }, [user, router]); // This effect runs only when user auth state is resolved or changes
 
-  // Debounced save effect for any subsequent changes
+  // Save effect for any subsequent changes
   useEffect(() => {
     // Do not save on the very first render or during the initial data load.
     if (!isMounted.current) {
       return;
     }
-    
-    // User started typing, show saving indicator only for logged-in users.
+
     if (user) {
+      // User is logged in, use debounced save to Firestore
       setIsSaving(true);
-    }
-    
-    const handler = setTimeout(() => {
-      if (user) {
-        // User is logged in, save to Firestore
+      const handler = setTimeout(() => {
         saveDraft(user.uid, text)
           .then(() => {
             // If a cloud save is successful, we can safely remove any lingering guest draft.
@@ -103,23 +99,22 @@ export default function Editor() {
               localStorage.removeItem("draft_guest");
             }
           })
-          .catch(error => {
+          .catch((error) => {
             console.error("Error saving draft to Firestore:", error);
           })
           .finally(() => setIsSaving(false));
-      } else {
-        // User is a guest.
-        // If the draft has content, save it. Otherwise, remove the key.
-        if (text.trim().length > 0) {
-            localStorage.setItem("draft_guest", text);
-        } else {
-            localStorage.removeItem("draft_guest");
-        }
-      }
-    }, 1500); // 1.5-second debounce
+      }, 1500); // 1.5-second debounce
 
-    return () => {
-      clearTimeout(handler);
+      return () => {
+        clearTimeout(handler);
+      };
+    } else {
+      // User is a guest. Save to localStorage immediately on text change.
+      if (text.trim().length > 0) {
+        localStorage.setItem("draft_guest", text);
+      } else {
+        localStorage.removeItem("draft_guest");
+      }
     }
   }, [text, user]); // Rerun on text or user change
 
