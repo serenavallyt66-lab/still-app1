@@ -101,36 +101,35 @@ function ScrollBlock({ title, desc }: { title: string; desc: string }) {
 }
 
 /**
- * This function checks for a guest draft in localStorage before the first render
- * on the client, ensuring a returning guest is taken directly to the editor.
- */
-const getInitialView = (): 'landing' | 'editor' => {
-  // On the server, always render the landing page.
-  if (typeof window === 'undefined') {
-    return 'landing';
-  }
-  const guestDraft = localStorage.getItem("draft_guest");
-  // If a guest draft exists and has content, show the editor.
-  if (guestDraft && guestDraft.trim().length > 0) {
-    return "editor";
-  }
-  // Otherwise, show the landing page.
-  return "landing";
-};
-
-
-/**
  * 🚀 MAIN LANDING PAGE / APP ENTRY
  */
 export default function AppEntry() {
-  // This is the key: decide the initial view *before* the first render on the client.
-  const [view, setView] = useState(getInitialView);
+  // Start in a 'loading' state to prevent hydration errors.
+  // The view is determined on the client-side after checking localStorage.
+  const [view, setView] = useState<'landing' | 'editor' | 'loading'>('loading');
   const [initialAuthOpen, setInitialAuthOpen] = useState(false);
+
+  // This effect runs only once on the client, after the component mounts.
+  useEffect(() => {
+    const guestDraft = localStorage.getItem("draft_guest");
+    if (guestDraft && guestDraft.trim().length > 0) {
+      setView("editor");
+    } else {
+      setView("landing");
+    }
+  }, []); // Empty dependency array ensures it runs only once.
+
 
   const handleSignInClick = () => {
     setInitialAuthOpen(true);
     setView("editor");
   };
+  
+  // Render nothing on the server and on the initial client render.
+  // This guarantees that the server and client HTML match, fixing the hydration error.
+  if (view === 'loading') {
+    return null;
+  }
 
   // If a draft exists or user wants to write, render the editor component directly.
   if (view === "editor") {
