@@ -107,31 +107,38 @@ function ScrollBlock({ title, desc }: { title: string; desc: string }) {
  */
 export default function AppEntry() {
   const router = useRouter();
+
+  // On initial load, we need to decide whether to show the editor or the landing page.
+  // This must be done carefully to avoid a "hydration mismatch" where the server-rendered
+  // content doesn't match the initial client-rendered content.
   const [showEditor, setShowEditor] = useState<boolean | null>(null);
 
-  // On initial load, decide whether to show the editor or the landing page.
-  // This avoids a client-side redirect and the flash of content that comes with it.
+  // We use useEffect to safely access `localStorage` only on the client, after the
+  // component has mounted.
   useEffect(() => {
     const guestDraft = localStorage.getItem("draft_guest");
-    // Only show editor if there's a draft with actual content.
+    // Only show the editor if a guest draft exists and it has actual content.
     if (guestDraft && guestDraft.trim().length > 0) {
       setShowEditor(true);
     } else {
       setShowEditor(false);
     }
-  }, []);
+  }, []); // The empty dependency array ensures this runs only once on mount.
 
-  // While checking for the draft, render a blank screen to prevent flashing the landing page.
+  // While we're checking for the draft on the client, we render a blank screen.
+  // This prevents the user from seeing a "flash" of the landing page before
+  // we determine the correct view.
   if (showEditor === null) {
     return <div className="min-h-screen bg-[#fcfbf9]"></div>;
   }
 
-  // If a draft exists, render the editor directly.
+  // If a draft exists, we render the editor component directly. The user bypasses
+  // the landing page for a seamless experience.
   if (showEditor) {
     return <EditorPage />;
   }
 
-  // Otherwise, render the landing page.
+  // If no valid draft exists, we show the main landing page.
   return (
     <div className="min-h-screen bg-[#fcfbf9] text-stone-800 selection:bg-stone-200 overflow-x-hidden relative">
       

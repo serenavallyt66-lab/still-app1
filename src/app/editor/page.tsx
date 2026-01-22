@@ -108,8 +108,13 @@ export default function Editor() {
           })
           .finally(() => setIsSaving(false));
       } else {
-        // User is a guest, save to localStorage silently
-        localStorage.setItem("draft_guest", text);
+        // User is a guest.
+        // If the draft has content, save it. Otherwise, remove the key.
+        if (text.trim().length > 0) {
+            localStorage.setItem("draft_guest", text);
+        } else {
+            localStorage.removeItem("draft_guest");
+        }
       }
     }, 1500); // 1.5-second debounce
 
