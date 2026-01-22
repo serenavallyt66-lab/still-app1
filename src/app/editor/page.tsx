@@ -144,7 +144,7 @@ export default function EditorPage({
       )}
 
       {/* TOP BAR */}
-      <div className="max-w-2xl mx-auto flex justify-between items-center mb-10 text-xs font-sans tracking-wide text-stone-400 select-none">
+      <div className="max-w-2xl mx-auto flex justify-between items-center mb-10 text-[13px] md:text-xs font-sans tracking-wide text-stone-400 select-none">
         <span className="flex items-center gap-2 animate-fade-in">
           {user === undefined ? (
             <span className="w-4 h-4 border-2 border-stone-200 border-t-stone-400 rounded-full animate-spin" />
@@ -216,7 +216,7 @@ export default function EditorPage({
         {/* SOFT GUIDANCE */}
         {text.length > 0 && text.length < 400 && (
           <div className="mt-6 flex flex-col items-start gap-4 animate-in fade-in slide-in-from-bottom-2 duration-700">
-             <p className="text-xs text-stone-400 font-sans italic">
+             <p className="text-[14px] md:text-xs text-stone-400 font-sans italic">
                You don’t have to finish this.
              </p>
 
