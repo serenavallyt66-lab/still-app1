@@ -1,6 +1,4 @@
 import {
-  GoogleAuthProvider,
-  signInWithPopup,
   signOut,
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword as firebaseSignInWithEmail,
@@ -17,17 +15,6 @@ export function onAuth(callback: (user: User) => void) {
       callback(null);
     }
   });
-}
-
-export async function signInWithGoogle(): Promise<void> {
-  const provider = new GoogleAuthProvider();
-  // This forces the account selection dialog to appear every time, which can
-  // resolve stubborn authentication issues on some browsers or when the user
-  // has multiple Google accounts.
-  provider.setCustomParameters({
-    prompt: "select_account",
-  });
-  await signInWithPopup(auth, provider);
 }
 
 export async function signUpWithEmailAndPassword(
