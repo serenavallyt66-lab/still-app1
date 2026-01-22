@@ -59,27 +59,29 @@ export default function EditorPage({
       const guestDraft = localStorage.getItem("draft_guest");
 
       if (user) {
-        // User is logged IN
+        // User just logged IN.
         if (guestDraft && guestDraft.trim().length > 0) {
-          // A guest draft exists, migrate it by loading it into the editor.
-          // The debounced save effect will automatically handle saving it to Firestore.
-          setText(guestDraft);
+          // A guest draft exists. Migrate it ONCE.
+          // 1. Set the editor text immediately for responsiveness.
+          setText(guestDraft); 
+          // 2. Save it to the cloud.
+          await saveDraft(user.uid, guestDraft);
+          // 3. Clear the local guest draft.
+          localStorage.removeItem("draft_guest");
         } else {
-          // No guest draft, just load from the cloud
+          // No guest draft to migrate, just load from the cloud.
           const cloudDraft = await loadDraft(user.uid);
-          
-          // If the cloud draft is empty, the user should be on the landing page.
-          if (!cloudDraft || cloudDraft.trim().length === 0) {
-              // This case should now be handled by the parent component logic, but as a fallback:
-              // window.location.href = '/'; 
-              // A hard redirect is safer if this component is ever rendered standalone.
-              // For now, we assume parent component handles the view.
-          }
-
+           if (!cloudDraft || cloudDraft.trim().length === 0) {
+              // Redirect to landing if cloud draft is empty
+              router.push('/');
+              return;
+           }
           setText(cloudDraft || '');
         }
       } else {
-        // User is logged OUT (is a guest)
+        // User is a GUEST (or just logged out).
+        // On logout, text state is cleared by handleLogout, so this will load ""
+        // On initial load as guest, this will load the draft.
         setText(guestDraft || "");
       }
       
@@ -90,7 +92,7 @@ export default function EditorPage({
     };
 
     initializeDraft();
-  }, [user, router]); // This effect runs only when user auth state is resolved or changes
+  }, [user, router]);
 
   // Save effect for any subsequent changes
   useEffect(() => {
@@ -104,12 +106,6 @@ export default function EditorPage({
       setIsSaving(true);
       const handler = setTimeout(() => {
         saveDraft(user.uid, text)
-          .then(() => {
-            // If a cloud save is successful, we can safely remove any lingering guest draft.
-            if (localStorage.getItem("draft_guest")) {
-              localStorage.removeItem("draft_guest");
-            }
-          })
           .catch((error) => {
             console.error("Error saving draft to Firestore:", error);
           })
@@ -121,16 +117,19 @@ export default function EditorPage({
       };
     } else {
       // User is a guest. Save to localStorage immediately on text change.
-      if (text.trim().length > 0) {
+      if (text && text.trim().length > 0) {
         localStorage.setItem("draft_guest", text);
       } else {
         localStorage.removeItem("draft_guest");
       }
     }
-  }, [text, user]); // Rerun on text or user change
+  }, [text, user]);
 
 
   const handleLogout = () => {
+    // Immediately clear the text state to prevent leaking logged-in data
+    // into the guest draft on the subsequent render cycle.
+    setText('');
     logout();
   };
 
