@@ -3,6 +3,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { ArrowRight, Feather } from "lucide-react";
 import EditorPage from "./editor/page";
 import Link from "next/link";
+import { onAuth } from "@/lib/auth";
 
 /**
  * 🧱 COMPONENTS: BRANDING
@@ -104,20 +105,38 @@ function ScrollBlock({ title, desc }: { title: string; desc: string }) {
  * 🚀 MAIN LANDING PAGE / APP ENTRY
  */
 export default function AppEntry() {
-  // Start in a 'loading' state to prevent hydration errors.
-  // The view is determined on the client-side after checking localStorage.
+  // 'loading' is the default state to prevent hydration errors.
+  // The correct view is determined client-side based on auth state and localStorage.
   const [view, setView] = useState<'landing' | 'editor' | 'loading'>('loading');
   const [initialAuthOpen, setInitialAuthOpen] = useState(false);
+  const authChecked = useRef(false);
 
-  // This effect runs only once on the client, after the component mounts.
+  // This effect runs once on the client to determine the correct initial view.
   useEffect(() => {
-    const guestDraft = localStorage.getItem("draft_guest");
-    if (guestDraft && guestDraft.trim().length > 0) {
-      setView("editor");
-    } else {
-      setView("landing");
-    }
-  }, []); // Empty dependency array ensures it runs only once.
+    if (authChecked.current) return; // Prevent double-runs in React 18 Strict Mode
+    authChecked.current = true;
+
+    // The onAuth function from Firebase is the single source of truth for auth state.
+    const unsubscribe = onAuth((user) => {
+      if (user) {
+        // A user is logged in. Go directly to the editor.
+        setView("editor");
+      } else {
+        // No user is logged in (they are a guest). Check for a local draft.
+        const guestDraft = localStorage.getItem("draft_guest");
+        if (guestDraft && guestDraft.trim().length > 0) {
+          // Guest has a draft, go to the editor.
+          setView("editor");
+        } else {
+          // Guest has no draft, show the landing page.
+          setView("landing");
+        }
+      }
+    });
+
+    // It's important to clean up the listener when the component unmounts.
+    return () => unsubscribe();
+  }, []); // Empty dependency array ensures this effect runs only once on mount.
 
 
   const handleSignInClick = () => {
@@ -125,13 +144,13 @@ export default function AppEntry() {
     setView("editor");
   };
   
-  // Render nothing on the server and on the initial client render.
-  // This guarantees that the server and client HTML match, fixing the hydration error.
+  // Render a blank page on the server and during the initial client 'loading' state.
+  // This guarantees no hydration mismatch and provides a clean, flicker-free experience.
   if (view === 'loading') {
     return null;
   }
 
-  // If a draft exists or user wants to write, render the editor component directly.
+  // If a draft exists or user is logged in, render the editor component directly.
   if (view === "editor") {
     return <EditorPage 
              key={initialAuthOpen ? 'auth-open' : 'auth-closed'} 
@@ -140,7 +159,7 @@ export default function AppEntry() {
            />;
   }
 
-  // If no valid draft exists, we show the main landing page.
+  // If no valid draft exists and user is not logged in, show the main landing page.
   return (
     <div className="min-h-screen bg-[#fcfbf9] text-stone-800 selection:bg-stone-200 overflow-x-hidden relative">
       
