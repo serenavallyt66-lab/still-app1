@@ -101,20 +101,31 @@ function ScrollBlock({ title, desc }: { title: string; desc: string }) {
 }
 
 /**
+ * This function checks for a guest draft in localStorage before the first render
+ * on the client, ensuring a returning guest is taken directly to the editor.
+ */
+const getInitialView = (): 'landing' | 'editor' => {
+  // On the server, always render the landing page.
+  if (typeof window === 'undefined') {
+    return 'landing';
+  }
+  const guestDraft = localStorage.getItem("draft_guest");
+  // If a guest draft exists and has content, show the editor.
+  if (guestDraft && guestDraft.trim().length > 0) {
+    return "editor";
+  }
+  // Otherwise, show the landing page.
+  return "landing";
+};
+
+
+/**
  * 🚀 MAIN LANDING PAGE / APP ENTRY
  */
 export default function AppEntry() {
-  // Default to "landing" to ensure server and client initial render match, preventing hydration errors.
-  const [view, setView] = useState<'landing' | 'editor'>('landing');
+  // This is the key: decide the initial view *before* the first render on the client.
+  const [view, setView] = useState(getInitialView);
   const [initialAuthOpen, setInitialAuthOpen] = useState(false);
-
-  // After mounting on the client, check for a guest draft and switch views if needed.
-  useEffect(() => {
-    const guestDraft = localStorage.getItem("draft_guest");
-    if (guestDraft && guestDraft.trim().length > 0) {
-      setView("editor");
-    }
-  }, []); // Empty array ensures this runs only once after the initial render.
 
   const handleSignInClick = () => {
     setInitialAuthOpen(true);
