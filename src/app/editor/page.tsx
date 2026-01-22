@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useRef } from "react";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 import { Lock, Cloud, CloudOff } from "lucide-react";
 import { onAuth, logout } from "@/lib/auth";
 import { saveDraft, loadDraft } from "@/lib/firestore";
@@ -15,6 +15,7 @@ export default function Editor() {
   const [isSaving, setIsSaving] = useState(false);
   const searchParams = useSearchParams();
   const isMounted = useRef(false);
+  const router = useRouter();
 
   // Open auth modal if query param is present
   useEffect(() => {
@@ -50,13 +51,20 @@ export default function Editor() {
 
       if (user) {
         // User is logged IN
-        if (guestDraft) {
+        if (guestDraft && guestDraft.trim().length > 0) {
           // A guest draft exists, migrate it by loading it into the editor.
           // The debounced save effect will automatically handle saving it to Firestore.
           setText(guestDraft);
         } else {
           // No guest draft, just load from the cloud
           const cloudDraft = await loadDraft(user.uid);
+          
+          // If the cloud draft is empty, the user should be on the landing page.
+          if (!cloudDraft || cloudDraft.trim().length === 0) {
+              router.push('/');
+              return;
+          }
+
           setText(cloudDraft);
         }
       } else {
@@ -71,7 +79,7 @@ export default function Editor() {
     };
 
     initializeDraft();
-  }, [user]); // This effect runs only when user auth state is resolved or changes
+  }, [user, router]); // This effect runs only when user auth state is resolved or changes
 
   // Debounced save effect for any subsequent changes
   useEffect(() => {
