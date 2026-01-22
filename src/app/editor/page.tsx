@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState, useRef } from "react";
-import { useRouter } from "next/navigation";
 import { Lock, Cloud, CloudOff } from "lucide-react";
 import { onAuth, logout } from "@/lib/auth";
 import { saveDraft, loadDraft } from "@/lib/firestore";
@@ -18,9 +17,10 @@ export default function EditorPage({
   const [user, setUser] = useState<User | undefined>(undefined);
   const [text, setText] = useState("");
   const [isAuthModalOpen, setAuthModalOpen] = useState(initialAuthModalOpen);
-  const [isSaving, setIsSaving] = useState(false);
+  const [saveState, setSaveState] = useState<"idle" | "saving" | "saved">("idle");
   const isMounted = useRef(false);
-  const router = useRouter();
+
+  // --- AUTH & INITIAL DATA LOAD ---
 
   useEffect(() => {
     if (initialAuthModalOpen) {
@@ -45,106 +45,114 @@ export default function EditorPage({
 
   // Effect for loading data and handling one-time migration
   useEffect(() => {
-    if (user === undefined) return; // Wait for auth state to be determined
+    if (user === undefined) return;
 
     const initialize = async () => {
-      isMounted.current = false; // Prevent save effect from running on this initial load
+      isMounted.current = false;
       const guestDraft = localStorage.getItem("draft_guest");
       const alreadyMigrated = localStorage.getItem("guest_migrated");
 
       if (user) {
-        // User is logged in
         if (guestDraft && guestDraft.trim().length > 0 && !alreadyMigrated) {
-          // ONE-TIME MIGRATION: Guest draft exists and has never been migrated
-          setText(guestDraft); // Set text in UI immediately
-          await saveDraft(user.uid, guestDraft); // Save to cloud
-          localStorage.setItem("guest_migrated", "true"); // Mark as migrated
-          localStorage.removeItem("draft_guest"); // Clean up local draft
+          setText(guestDraft);
+          await saveDraft(user.uid, guestDraft);
+          localStorage.setItem("guest_migrated", "true");
+          localStorage.removeItem("draft_guest");
+          setSaveState("saved");
         } else {
-          // RETURNING USER: Load their draft from the cloud
           const cloudDraft = await loadDraft(user.uid);
           setText(cloudDraft || "");
+          setSaveState("idle"); 
         }
       } else {
-        // GUEST: Load draft from local storage
         setText(guestDraft || "");
+        setSaveState("idle");
       }
-      // Allow saving effects to run after this initial setup is complete
       setTimeout(() => {
         isMounted.current = true;
       }, 50);
     };
 
     initialize();
-  }, [user]); // This effect runs only when auth state changes
+  }, [user]);
 
-  // Effect for saving data (separated for clarity)
+  // --- TEXT CHANGE & SAVING LOGIC ---
+
+  const handleTextChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setText(e.target.value);
+    if (user) {
+      setSaveState("saving");
+    }
+  };
+  
+  // Debounced save to Firestore for logged-in users
   useEffect(() => {
-    // Do not run on the initial render/data load
-    if (!isMounted.current) {
+    if (!isMounted.current || !user || saveState !== 'saving') {
       return;
     }
-
-    // --- GUEST SAVING ---
-    if (!user) {
-      if (text.trim().length > 0) {
-        localStorage.setItem("draft_guest", text);
-      } else {
-        localStorage.removeItem("draft_guest");
-      }
-      return; // End here for guests
-    }
-
-    // --- LOGGED-IN SAVING (DEBOUNCED) ---
+    
     const handler = setTimeout(() => {
-      setIsSaving(true);
-      
-      const savePromise = saveDraft(user.uid, text);
-      // Ensure the saving indicator is visible for at least 500ms to avoid flickering
-      const minDisplayTimePromise = new Promise(resolve => setTimeout(resolve, 500));
-
-      Promise.all([savePromise, minDisplayTimePromise])
-        .catch((error) => {
-          console.error("Error saving draft:", error);
-        })
-        .finally(() => {
-          setIsSaving(false);
-        });
-    }, 1500); // 1.5-second debounce
+      saveDraft(user.uid, text).then(() => {
+        setSaveState("saved");
+      });
+    }, 800); // Debounce time
 
     return () => {
       clearTimeout(handler);
     };
-  }, [text, user]); // This effect runs when text or user changes
+  }, [text, user, saveState]); 
+
+  // Local-only save for guests
+  useEffect(() => {
+    if (user || !isMounted.current) return;
+
+    if (text.trim().length > 0) {
+      localStorage.setItem("draft_guest", text);
+    } else {
+      localStorage.removeItem("draft_guest");
+    }
+  }, [text, user]);
+
+  // Micro-polish: Reset 'saved' state to 'idle' after a delay
+  useEffect(() => {
+    if (saveState === 'saved') {
+      const timer = setTimeout(() => {
+        setSaveState('idle');
+      }, 2000);
+      return () => clearTimeout(timer);
+    }
+  }, [saveState]);
+
+  // --- ACTIONS & RENDER ---
 
   const handleLogout = () => {
-    setText(""); // Hard reset of text state on logout
     logout();
+    setText("");
+    setSaveState("idle");
   };
 
   return (
     <div className="min-h-screen bg-[#fcfbf9] text-stone-800 font-serif px-6 md:px-12 py-10 transition-colors duration-500">
       {isAuthModalOpen && <AuthPage onDismiss={handleDismissModal} />}
 
-      {/* TOP BAR */}
       <div className="max-w-2xl mx-auto flex justify-between items-center mb-10 text-[13px] md:text-xs font-sans tracking-wide text-stone-400 select-none">
         <span className="flex items-center gap-2 animate-fade-in">
           {user === undefined ? (
             <span className="w-4 h-4 border-2 border-stone-200 border-t-stone-400 rounded-full animate-spin" />
           ) : user ? (
-            isSaving ? (
-              <>
-                <Cloud size={14} className="animate-pulse" />
-                <span className="text-stone-500 font-medium">Saving...</span>
-              </>
-            ) : (
-              <>
-                <Cloud size={14} className="text-emerald-600/70" />
-                <span className="text-stone-500 font-medium">
-                  Draft secured
-                </span>
-              </>
-            )
+            <>
+              {saveState === 'saving' ? (
+                <>
+                  <Cloud size={14} className="animate-pulse" />
+                  <span className="text-stone-500 font-medium">Saving...</span>
+                </>
+              ) : (
+                <>
+                  <Cloud size={14} className="text-emerald-600/70" />
+                  <span className="text-stone-500 font-medium">Draft secured</span>
+                </>
+              )}
+            </>
           ) : (
             <>
               <CloudOff size={14} />
@@ -154,70 +162,36 @@ export default function EditorPage({
         </span>
 
         {user ? (
-          <button
-            onClick={handleLogout}
-            className="hover:text-stone-600 transition cursor-pointer"
-          >
+          <button onClick={handleLogout} className="hover:text-stone-600 transition cursor-pointer">
             Logout
           </button>
         ) : user === undefined ? null : (
-          <button
-            onClick={() => setAuthModalOpen(true)}
-            className="flex items-center gap-2 hover:text-stone-600 transition cursor-pointer group"
-          >
+          <button onClick={() => setAuthModalOpen(true)} className="flex items-center gap-2 hover:text-stone-600 transition cursor-pointer group">
             <Lock size={12} className="group-hover:text-stone-600 transition" />
             Save privately
           </button>
         )}
       </div>
 
-      {/* EDITOR */}
       <div className="max-w-2xl mx-auto relative">
         <textarea
           value={text}
-          onChange={(e) => setText(e.target.value)}
+          onChange={handleTextChange}
           autoFocus
           spellCheck={false}
           placeholder="Write what’s on your mind. Messy is fine."
-          className="
-            w-full
-            h-[65vh]
-            bg-transparent
-            resize-none
-            outline-none
-            border-none
-            text-xl md:text-2xl
-            leading-relaxed
-            placeholder:text-stone-300
-            placeholder:italic
-            selection:bg-stone-200
-            disabled:opacity-50
-          "
+          className="w-full h-[65vh] bg-transparent resize-none outline-none border-none text-xl md:text-2xl leading-relaxed placeholder:text-stone-300 placeholder:italic selection:bg-stone-200 disabled:opacity-50"
           disabled={user === undefined}
         />
 
-        {/* SOFT GUIDANCE */}
         {text.length > 0 && text.length < 400 && (
           <div className="mt-6 flex flex-col items-start gap-4 animate-in fade-in slide-in-from-bottom-2 duration-700">
             <p className="text-[14px] md:text-xs text-stone-400 font-sans italic">
               You don’t have to finish this.
             </p>
 
-            {/* CONVERSION MOMENT */}
             {!user && text.length > 120 && (
-              <button
-                onClick={() => setAuthModalOpen(true)}
-                className="
-                  text-xs
-                  font-sans
-                  text-stone-400
-                  hover:text-stone-700
-                  underline
-                  underline-offset-4
-                  transition
-                  cursor-pointer
-                "
-              >
+              <button onClick={() => setAuthModalOpen(true)} className="text-xs font-sans text-stone-400 hover:text-stone-700 underline underline-offset-4 transition cursor-pointer">
                 Keep this safe across devices
               </button>
             )}
