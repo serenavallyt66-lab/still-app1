@@ -8,6 +8,8 @@ import { saveDraft, loadDraft } from "@/lib/firestore";
 import type { User } from "@/types/user";
 import AuthPage from "@/components/AuthPage";
 
+let authProcessLock = false; // Module-level lock to prevent race conditions
+
 export default function EditorPage({
   initialAuthModalOpen = false,
   onAuthModalDismiss,
@@ -52,50 +54,60 @@ export default function EditorPage({
   // Main effect to orchestrate mode changes based on auth state.
   useEffect(() => {
     const unsubscribe = onAuth(async (newUser) => {
-      // If there's a user, we're in logged mode.
-      if (newUser) {
-        setUser(newUser); // Keep user object for other parts of UI
+      if (authProcessLock) return; // If a process is already running, ignore subsequent calls.
+      authProcessLock = true;     // Acquire the lock.
 
-        // This is the critical migration and loading logic.
-        setIsMigrating(true);
-        const localGuestDraft = localStorage.getItem("draft_guest");
-        const existingCloudDraft = await loadDraft(newUser.uid);
+      try {
+        // If there's a user, we're in logged mode.
+        if (newUser) {
+          setUser(newUser); // Keep user object for other parts of UI
 
-        // CASE 1: Cloud already has content. It is the source of truth.
-        if (existingCloudDraft !== null) {
-          setCloudText(existingCloudDraft);
-          setSaveState("saved");
+          // This is the critical migration and loading logic.
+          setIsMigrating(true);
+          const localGuestDraft = localStorage.getItem("draft_guest");
+          const existingCloudDraft = await loadDraft(newUser.uid);
+
+          // CASE 1: Cloud already has content. It is the source of truth.
+          if (existingCloudDraft !== null) {
+            setCloudText(existingCloudDraft);
+            setSaveState("saved");
+          }
+          // CASE 2: Cloud is empty, but a local guest draft exists. Migrate it.
+          else if (localGuestDraft && localGuestDraft.trim()) {
+            setCloudText(localGuestDraft); // Show content immediately
+            await saveDraft(newUser.uid, localGuestDraft); // Save to cloud
+            setSaveState("saved");
+          }
+          // CASE 3: New user, no drafts anywhere.
+          else {
+            setCloudText("");
+            setSaveState("idle");
+          }
+
+          // Migration is complete, switch to logged mode and clean up guest state.
+          setGuestText("");
+          localStorage.removeItem("draft_guest");
+          setMode("logged");
+          setIsMigrating(false);
+          handleDismissModal();
         }
-        // CASE 2: Cloud is empty, but a local guest draft exists. Migrate it.
-        else if (localGuestDraft && localGuestDraft.trim()) {
-          setCloudText(localGuestDraft); // Show content immediately
-          await saveDraft(newUser.uid, localGuestDraft); // Save to cloud
-          setSaveState("saved");
-        }
-        // CASE 3: New user, no drafts anywhere.
+        // No user, we're in guest mode.
         else {
-          setCloudText("");
-          setSaveState("idle");
+          setUser(null);
+          const localGuestDraft = localStorage.getItem("draft_guest");
+          setGuestText(localGuestDraft || "");
+          setCloudText(""); // Clear cloud text on logout
+          setMode("guest");
         }
-
-        // Migration is complete, switch to logged mode and clean up guest state.
-        setGuestText("");
-        localStorage.removeItem("draft_guest");
-        setMode("logged");
-        setIsMigrating(false);
-        handleDismissModal();
-      }
-      // No user, we're in guest mode.
-      else {
-        setUser(null);
-        const localGuestDraft = localStorage.getItem("draft_guest");
-        setGuestText(localGuestDraft || "");
-        setCloudText(""); // Clear cloud text on logout
-        setMode("guest");
+      } finally {
+        authProcessLock = false; // Always release the lock.
       }
     });
 
-    return () => unsubscribe();
+    return () => {
+      unsubscribe();
+      authProcessLock = false; // Also release on component unmount.
+    };
   }, []); // This runs only once to set up the auth listener.
 
   // --- TEXT CHANGE & SAVING LOGIC ---
