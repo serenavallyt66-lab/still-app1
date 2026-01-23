@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState } from "react";
 import { Lock, Cloud, CloudOff } from "lucide-react";
 import { onAuth, logout } from "@/lib/auth";
 import { saveDraft, loadDraft } from "@/lib/firestore";
@@ -24,7 +24,6 @@ export default function EditorPage({
   const [cloudText, setCloudText] = useState("");
   const [isMigrating, setIsMigrating] = useState(false);
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved">("idle");
-  const initialLoadComplete = useRef(false); // Ref for micro-polish
   
   const editorText = mode === "guest" ? guestText : cloudText;
 
@@ -44,8 +43,6 @@ export default function EditorPage({
   // Main effect to orchestrate mode changes based on auth state.
   useEffect(() => {
     const unsubscribe = onAuth(async (newUser) => {
-      initialLoadComplete.current = false; // Reset on every auth change
-      
       // If there's a user, we're in logged mode.
       if (newUser) {
         setUser(newUser); // Keep user object for other parts of UI
@@ -78,7 +75,6 @@ export default function EditorPage({
         setMode("logged");
         setIsMigrating(false);
         handleDismissModal();
-        initialLoadComplete.current = true; // Mark initial load as complete
       }
       // No user, we're in guest mode.
       else {
@@ -87,7 +83,6 @@ export default function EditorPage({
         setGuestText(localGuestDraft || "");
         setCloudText(""); // Clear cloud text on logout
         setMode("guest");
-        initialLoadComplete.current = true; // Guest mode is also 'loaded'
       }
     });
 
@@ -130,9 +125,9 @@ export default function EditorPage({
     localStorage.setItem("draft_guest", guestText);
   }, [guestText, mode]);
 
-  // Micro-polish: Reset 'saved' state to 'idle' after a delay, but not on initial load.
+  // Micro-polish: Reset 'saved' state to 'idle' after a delay
   useEffect(() => {
-    if (saveState === 'saved' && initialLoadComplete.current) {
+    if (saveState === 'saved') {
       const timer = setTimeout(() => setSaveState('idle'), 2000);
       return () => clearTimeout(timer);
     }
