@@ -151,14 +151,6 @@ export default function EditorPage({
     localStorage.setItem("draft_guest", guestText);
   }, [guestText, mode]);
 
-  // Micro-polish: Reset 'saved' state to 'idle' after a delay
-  useEffect(() => {
-    if (saveState === 'saved') {
-      const timer = setTimeout(() => setSaveState('idle'), 2000);
-      return () => clearTimeout(timer);
-    }
-  }, [saveState]);
-
   // --- ACTIONS & RENDER ---
 
   const handleLogout = async () => {
