@@ -64,30 +64,35 @@ export default function EditorPage({
 
           // This is the critical migration and loading logic.
           setIsMigrating(true);
-          const localGuestDraft = localStorage.getItem("draft_guest");
           const existingCloudDraft = await loadDraft(newUser.uid);
 
           // CASE 1: Cloud already has content. It is the source of truth.
-          if (existingCloudDraft !== null) {
+          // A "truthy" check handles both non-empty strings and is safe.
+          if (existingCloudDraft) {
             setCloudText(existingCloudDraft);
             setSaveState("saved");
           }
-          // CASE 2: Cloud is empty, but a local guest draft exists. Migrate it.
-          else if (localGuestDraft && localGuestDraft.trim()) {
-            setCloudText(localGuestDraft); // Show content immediately
-            await saveDraft(newUser.uid, localGuestDraft); // Save to cloud
-            setSaveState("saved");
-          }
-          // CASE 3: New user, no drafts anywhere.
+          // CASE 2: Cloud is empty (null or ""). We can migrate.
           else {
-            setCloudText("");
-            setSaveState("idle");
+            const localGuestDraft = localStorage.getItem("draft_guest");
+            // Check if there's a local draft to migrate.
+            if (localGuestDraft && localGuestDraft.trim()) {
+              setCloudText(localGuestDraft); // Show content immediately
+              await saveDraft(newUser.uid, localGuestDraft); // Save to cloud
+              setSaveState("saved");
+            }
+            // CASE 3: Cloud is empty and no local draft exists.
+            else {
+              setCloudText("");
+              setSaveState("idle");
+            }
           }
 
           // Migration is complete, switch to logged mode and clean up guest state.
           setGuestText("");
           localStorage.removeItem("draft_guest");
           setMode("logged");
+  
           setIsMigrating(false);
           handleDismissModal();
         }
