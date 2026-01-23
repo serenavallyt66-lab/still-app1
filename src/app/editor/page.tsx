@@ -25,7 +25,7 @@ export default function EditorPage({
   const [guestText, setGuestText] = useState("");
   const [cloudText, setCloudText] = useState("");
   const [isMigrating, setIsMigrating] = useState(false);
-  const [saveState, setSaveState] = useState<"idle" | "saving" | "saved">("idle");
+  const [saveState, setSaveState] = useState<"idle" | "saving" | "saved">("saved");
   
   const editorText = mode === "guest" ? guestText : cloudText;
 
@@ -84,7 +84,7 @@ export default function EditorPage({
             // CASE 3: Cloud is empty and no local draft exists.
             else {
               setCloudText("");
-              setSaveState("idle");
+              setSaveState("saved");
             }
           }
 
@@ -177,13 +177,12 @@ export default function EditorPage({
                   <span className="text-stone-500 font-medium">Saving...</span>
                 </>
               )}
-              {saveState === 'saved' && (
+              {saveState === 'saved' && cloudText.length > 0 && (
                 <>
                   <Cloud size={14} className="text-emerald-600/70" />
                   <span className="text-stone-500 font-medium">Draft secured</span>
                 </>
               )}
-               {saveState === 'idle' && cloudText.length > 0 && <Cloud size={14} />}
             </>
           ) : ( // guest mode
             <>
