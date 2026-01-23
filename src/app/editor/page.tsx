@@ -66,9 +66,8 @@ export default function EditorPage({
           setIsMigrating(true);
           const existingCloudDraft = await loadDraft(newUser.uid);
 
-          // CASE 1: Cloud already has content. It is the source of truth.
-          // A "truthy" check handles both non-empty strings and is safe.
-          if (existingCloudDraft) {
+          // CASE 1: Cloud has content. It is the source of truth.
+          if (existingCloudDraft && existingCloudDraft.trim()) {
             setCloudText(existingCloudDraft);
             setSaveState("saved");
           }
@@ -177,7 +176,7 @@ export default function EditorPage({
                   <span className="text-stone-500 font-medium">Saving...</span>
                 </>
               )}
-              {saveState === 'saved' && cloudText.length > 0 && (
+              {saveState === 'saved' && (
                 <>
                   <Cloud size={14} className="text-emerald-600/70" />
                   <span className="text-stone-500 font-medium">Draft secured</span>
