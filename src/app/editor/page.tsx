@@ -22,7 +22,7 @@ export default function EditorPage({
   // This ref is critical to prevent debounced saves during the initial data load/migration.
   const isInitialized = useRef(false);
   // This ref prevents the initialization logic from re-running due to auth state changes, fixing the race condition.
-  const userInitialized = useRef<string | null>(null);
+  const userInitialized = useRef<string | null | undefined>(undefined);
 
 
   // --- AUTH & INITIAL DATA LOAD ---
@@ -55,22 +55,28 @@ export default function EditorPage({
     if (user === undefined) return;
     
     // Prevent re-initialization for the same user/guest state to avoid race conditions.
-    if (user && userInitialized.current === user.uid) return;
-    if (!user && userInitialized.current === null) return;
-
+    const currentUserId = user ? user.uid : null;
+    if (userInitialized.current === currentUserId) return;
+    
     const initializeUserData = async () => {
+      // Mark this user/guest state as initialized to prevent this block from re-running.
+      userInitialized.current = currentUserId;
       isInitialized.current = false; // Prevent other effects until initialization is complete.
       
       if (user) { // A user is logged in.
-        const cloudDraft = await loadDraft(user.uid);
         const guestDraft = localStorage.getItem("draft_guest");
+        // IMPORTANT: Immediately remove the guest draft to prevent race conditions.
+        // Its value is now safely in the guestDraft variable for this one atomic operation.
+        localStorage.removeItem("draft_guest");
+        
+        const cloudDraft = await loadDraft(user.uid);
 
         // CASE 1: The user has an existing draft in the cloud. This is the highest priority.
         if (cloudDraft !== null) {
           setText(cloudDraft);
           setSaveState("saved");
         } 
-        // CASE 2: The user's cloud account is empty, but a local guest draft exists. Migrate it.
+        // CASE 2: The user's cloud account is empty, but a local guest draft existed. Migrate it.
         else if (guestDraft && guestDraft.trim()) {
           setText(guestDraft); // Show content immediately.
           setSaveState("saving");
@@ -83,20 +89,16 @@ export default function EditorPage({
           setSaveState("idle");
         }
 
-        // Clean up the local draft only after all logic is complete to prevent race conditions.
-        localStorage.removeItem("draft_guest");
-        userInitialized.current = user.uid; // Mark this user as initialized.
-
       } 
       // CASE 4: The user is a guest (logged out).
       else {
         const guestDraft = localStorage.getItem("draft_guest");
         setText(guestDraft || "");
         setSaveState("idle");
-        userInitialized.current = null; // Mark guest state as initialized.
       }
 
       // Initialization is complete. Allow other effects (like debounced saving) to run.
+      // Use a small timeout to ensure it runs after the current render cycle.
       setTimeout(() => {
         isInitialized.current = true;
       }, 50);
@@ -109,7 +111,8 @@ export default function EditorPage({
 
   // On typing, immediately show "Saving..." for logged-in users.
   const handleTextChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    setText(e.target.value);
+    const newText = e.target.value;
+    setText(newText);
     if (user) {
       setSaveState("saving");
     }
@@ -122,9 +125,11 @@ export default function EditorPage({
     }
 
     const handler = setTimeout(() => {
-      saveDraft(user.uid, text).then(() => {
-        setSaveState("saved");
-      });
+      if (text !== undefined) { // Ensure text is not undefined before saving
+          saveDraft(user.uid, text).then(() => {
+            setSaveState("saved");
+          });
+      }
     }, 800); // Debounce time
 
     return () => clearTimeout(handler);
@@ -133,10 +138,12 @@ export default function EditorPage({
   // Local-only save for guests.
   useEffect(() => {
     if (user || !isInitialized.current) return;
-    localStorage.setItem("draft_guest", text);
+    if (text !== undefined) { // Ensure text is not undefined before saving
+        localStorage.setItem("draft_guest", text);
+    }
   }, [text, user]);
 
-  // Micro-polish: Reset 'saved' state to 'idle' after a delay.
+  // Micro-polish: Reset 'saved' state to 'idle' after a delay, but not on initial load.
   useEffect(() => {
     if (saveState === 'saved' && isInitialized.current) {
       const timer = setTimeout(() => setSaveState('idle'), 2000);
@@ -147,13 +154,11 @@ export default function EditorPage({
   // --- ACTIONS & RENDER ---
 
   const handleLogout = () => {
-    if (!user) {
-      localStorage.setItem("draft_guest", text);
+    if (user) {
+        localStorage.setItem("draft_guest", text);
     }
     logout();
-    setText(""); 
-    setSaveState("idle");
-    userInitialized.current = null; // Reset initialization on logout
+    userInitialized.current = undefined; // Reset initialization on logout to allow re-init on next login
   };
 
   return (
@@ -179,6 +184,7 @@ export default function EditorPage({
                   <span className="text-stone-500 font-medium">Draft secured</span>
                 </>
               )}
+               {saveState === 'idle' && text.length > 0 && <Cloud size={14} />}
             </>
           ) : (
             <>
