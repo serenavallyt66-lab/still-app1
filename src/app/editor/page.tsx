@@ -18,7 +18,8 @@ export default function EditorPage({
   const [text, setText] = useState("");
   const [isAuthModalOpen, setAuthModalOpen] = useState(initialAuthModalOpen);
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved">("idle");
-  const isMounted = useRef(false);
+  // This ref is critical to prevent debounced saves during the initial data load/migration.
+  const isInitialized = useRef(false);
 
   // --- AUTH & INITIAL DATA LOAD ---
 
@@ -35,10 +36,7 @@ export default function EditorPage({
 
   useEffect(() => {
     const unsubscribe = onAuth((newUser) => {
-      // Set the user state. This will trigger the main data loading effect.
       setUser(newUser);
-      
-      // Close auth modal on successful login/signup
       if (newUser) {
         handleDismissModal();
       }
@@ -46,50 +44,52 @@ export default function EditorPage({
     return () => unsubscribe();
   }, []);
 
-  // Effect for loading data and handling the critical guest-to-logged-in migration.
+  // Main effect for loading data and handling the critical guest-to-logged-in migration.
+  // This is designed to be robust against re-runs from the auth listener.
   useEffect(() => {
-    if (user === undefined) return; // Don't run on initial undefined state
+    // Don't run on the initial undefined state while waiting for the auth check.
+    if (user === undefined) return;
 
     const initializeUserData = async () => {
-      isMounted.current = false;
+      isInitialized.current = false; // Prevent other effects until initialization is complete.
       
       if (user) { // A user is logged in.
+        // Atomically read both sources of truth before making any decisions.
         const cloudDraft = await loadDraft(user.uid);
         const guestDraft = localStorage.getItem("draft_guest");
 
-        // CASE: Logged account ALREADY HAS CONTENT.
-        // The cloud draft is the source of truth.
+        // CASE 1: The user has an existing draft in the cloud. This is the highest priority.
         if (cloudDraft !== null) {
           setText(cloudDraft);
           setSaveState("saved");
-          // Clean up any lingering local draft to prevent conflicts.
-          localStorage.removeItem("draft_guest");
         } 
-        // CASE: Guest -> Login (Logged account is EMPTY).
-        // No cloud draft exists, but there's a local guest draft. We must migrate it.
+        // CASE 2: The user's cloud account is empty, but a local guest draft exists. Migrate it.
         else if (guestDraft && guestDraft.trim()) {
-          setText(guestDraft); // Immediately update UI.
+          setText(guestDraft); // Show content immediately.
           setSaveState("saving");
           await saveDraft(user.uid, guestDraft); // Save to cloud.
-          localStorage.removeItem("draft_guest"); // Clean up local draft.
           setSaveState("saved");
         } 
-        // CASE: New user with no drafts anywhere.
+        // CASE 3: New user with no drafts anywhere. Start fresh.
         else {
           setText("");
           setSaveState("idle");
         }
+
+        // Clean up the local draft only after all logic is complete to prevent race conditions.
+        localStorage.removeItem("draft_guest");
+
       } 
-      // CASE: User is a guest (logged out).
+      // CASE 4: The user is a guest (logged out).
       else {
         const guestDraft = localStorage.getItem("draft_guest");
         setText(guestDraft || "");
         setSaveState("idle");
       }
 
-      // Initialization is complete. Allow other effects to run.
+      // Initialization is complete. Allow other effects (like debounced saving) to run.
       setTimeout(() => {
-        isMounted.current = true;
+        isInitialized.current = true;
       }, 50);
     };
 
@@ -98,7 +98,7 @@ export default function EditorPage({
 
   // --- TEXT CHANGE & SAVING LOGIC ---
 
-  // 1. On typing, immediately show "Saving..." for logged-in users.
+  // On typing, immediately show "Saving..." for logged-in users.
   const handleTextChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setText(e.target.value);
     if (user) {
@@ -106,9 +106,9 @@ export default function EditorPage({
     }
   };
 
-  // 2. Debounced save to Firestore for logged-in users.
+  // Debounced save to Firestore for logged-in users.
   useEffect(() => {
-    if (!user || !isMounted.current || saveState !== 'saving') {
+    if (!user || !isInitialized.current || saveState !== 'saving') {
       return;
     }
 
@@ -121,15 +121,15 @@ export default function EditorPage({
     return () => clearTimeout(handler);
   }, [text, user, saveState]);
 
-  // 3. Local-only save for guests.
+  // Local-only save for guests.
   useEffect(() => {
-    if (user || !isMounted.current) return;
+    if (user || !isInitialized.current) return;
     localStorage.setItem("draft_guest", text);
   }, [text, user]);
 
-  // 4. Micro-polish: Reset 'saved' state to 'idle' after a delay.
+  // Micro-polish: Reset 'saved' state to 'idle' after a delay.
   useEffect(() => {
-    if (saveState === 'saved' && isMounted.current) {
+    if (saveState === 'saved' && isInitialized.current) {
       const timer = setTimeout(() => setSaveState('idle'), 2000);
       return () => clearTimeout(timer);
     }
@@ -138,12 +138,11 @@ export default function EditorPage({
   // --- ACTIONS & RENDER ---
 
   const handleLogout = () => {
-    // Before logging out, save any final changes if the user is a guest.
     if (!user) {
       localStorage.setItem("draft_guest", text);
     }
     logout();
-    setText(""); // Clear text for a clean slate on logout.
+    setText(""); 
     setSaveState("idle");
   };
 
