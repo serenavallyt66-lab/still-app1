@@ -33,6 +33,15 @@ export default function EditorPage({
     setAuthModalOpen(false);
     onAuthModalDismiss?.();
   };
+  
+  const handleOpenAuthModal = () => {
+    // Force-save guest text to localStorage before opening the auth modal
+    // to prevent race conditions where state update hasn't been persisted yet.
+    if (mode === 'guest') {
+      localStorage.setItem('draft_guest', guestText);
+    }
+    setAuthModalOpen(true);
+  };
 
   useEffect(() => {
     if (initialAuthModalOpen) {
@@ -180,7 +189,7 @@ export default function EditorPage({
             Logout
           </button>
         ) : mode === 'loading' ? null : ( // guest mode
-          <button onClick={() => setAuthModalOpen(true)} className="flex items-center gap-2 hover:text-stone-600 transition cursor-pointer group">
+          <button onClick={handleOpenAuthModal} className="flex items-center gap-2 hover:text-stone-600 transition cursor-pointer group">
             <Lock size={12} className="group-hover:text-stone-600 transition" />
             Save privately
           </button>
@@ -200,7 +209,7 @@ export default function EditorPage({
 
         {mode === 'guest' && guestText.length > 120 && (
           <div className="mt-6 flex flex-col items-start gap-4 animate-in fade-in slide-in-from-bottom-2 duration-700">
-            <button onClick={() => setAuthModalOpen(true)} className="text-xs font-sans text-stone-400 hover:text-stone-700 underline underline-offset-4 transition cursor-pointer">
+            <button onClick={handleOpenAuthModal} className="text-xs font-sans text-stone-400 hover:text-stone-700 underline underline-offset-4 transition cursor-pointer">
               Keep this safe across devices
             </button>
           </div>
