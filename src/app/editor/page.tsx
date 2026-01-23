@@ -35,14 +35,9 @@ export default function EditorPage({
 
   useEffect(() => {
     const unsubscribe = onAuth((newUser) => {
-      // Explicitly handle logout: reset state for a clean slate
-      if (newUser === null) {
-        setUser(null);
-        setText(""); 
-        setSaveState("idle");
-      } else {
-        setUser(newUser);
-      }
+      // Set the user state. This will trigger the main data loading effect.
+      setUser(newUser);
+      
       // Close auth modal on successful login/signup
       if (newUser) {
         handleDismissModal();
@@ -51,69 +46,69 @@ export default function EditorPage({
     return () => unsubscribe();
   }, []);
 
-  // Effect for loading data and handling one-time migration
+  // Effect for loading data and handling the critical guest-to-logged-in migration.
   useEffect(() => {
     if (user === undefined) return; // Don't run on initial undefined state
 
-    const initialize = async () => {
+    const initializeUserData = async () => {
       isMounted.current = false;
       
-      if (user) { // A user is logged in
+      if (user) { // A user is logged in.
         const cloudDraft = await loadDraft(user.uid);
-        
+        const guestDraft = localStorage.getItem("draft_guest");
+
+        // CASE: Logged account ALREADY HAS CONTENT.
+        // The cloud draft is the source of truth.
         if (cloudDraft !== null) {
-          // Priority #1: If a cloud draft exists, use it.
           setText(cloudDraft);
-          setSaveState("saved"); // The loaded draft is secure.
-          // A cloud draft exists, so any local guest draft is now irrelevant and should be discarded.
+          setSaveState("saved");
+          // Clean up any lingering local draft to prevent conflicts.
           localStorage.removeItem("draft_guest");
-        } else {
-          // Priority #2: No cloud draft? Check for a one-time guest migration.
-          const guestDraft = localStorage.getItem("draft_guest");
-    
-          if (guestDraft) {
-            await saveDraft(user.uid, guestDraft); // Migrate guest draft to cloud
-            setText(guestDraft); // Set UI state
-            localStorage.removeItem("draft_guest"); // Clean up guest draft
-            setSaveState("saved"); // Migrated draft is now secure
-          } else {
-            // New user with no drafts.
-            setText("");
-            setSaveState("idle");
-          }
+        } 
+        // CASE: Guest -> Login (Logged account is EMPTY).
+        // No cloud draft exists, but there's a local guest draft. We must migrate it.
+        else if (guestDraft && guestDraft.trim()) {
+          setText(guestDraft); // Immediately update UI.
+          setSaveState("saving");
+          await saveDraft(user.uid, guestDraft); // Save to cloud.
+          localStorage.removeItem("draft_guest"); // Clean up local draft.
+          setSaveState("saved");
+        } 
+        // CASE: New user with no drafts anywhere.
+        else {
+          setText("");
+          setSaveState("idle");
         }
-      } else { // Guest user
+      } 
+      // CASE: User is a guest (logged out).
+      else {
         const guestDraft = localStorage.getItem("draft_guest");
         setText(guestDraft || "");
         setSaveState("idle");
       }
 
-      // Allow effects to run after initialization is complete
+      // Initialization is complete. Allow other effects to run.
       setTimeout(() => {
         isMounted.current = true;
       }, 50);
     };
 
-    initialize();
+    initializeUserData();
   }, [user]);
 
   // --- TEXT CHANGE & SAVING LOGIC ---
 
-  // 1. On typing, immediately show "Saving..."
+  // 1. On typing, immediately show "Saving..." for logged-in users.
   const handleTextChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setText(e.target.value);
     if (user) {
-      setSaveState("saving"); // Instant feedback
+      setSaveState("saving");
     }
   };
 
-  // 2. Debounced save to Firestore for logged-in users
+  // 2. Debounced save to Firestore for logged-in users.
   useEffect(() => {
-    // Only run this logic for logged-in users.
-    if (!user) return;
-    
-    // We only want to trigger a save if the user has made an edit.
-    if (saveState !== 'saving') {
+    if (!user || !isMounted.current || saveState !== 'saving') {
       return;
     }
 
@@ -123,29 +118,19 @@ export default function EditorPage({
       });
     }, 800); // Debounce time
 
-    return () => {
-      clearTimeout(handler);
-    };
-  }, [text, user, saveState]); // Re-runs when text changes, correctly debouncing.
+    return () => clearTimeout(handler);
+  }, [text, user, saveState]);
 
-  // 3. Local-only save for guests
+  // 3. Local-only save for guests.
   useEffect(() => {
     if (user || !isMounted.current) return;
-
-    if (text.trim().length > 0) {
-      localStorage.setItem("draft_guest", text);
-    } else {
-      localStorage.removeItem("draft_guest");
-    }
+    localStorage.setItem("draft_guest", text);
   }, [text, user]);
 
-  // 4. Micro-polish: Reset 'saved' state to 'idle' after a delay
+  // 4. Micro-polish: Reset 'saved' state to 'idle' after a delay.
   useEffect(() => {
-    // Only run this polish effect if the change was due to an active save, not initial load.
     if (saveState === 'saved' && isMounted.current) {
-      const timer = setTimeout(() => {
-        setSaveState('idle');
-      }, 2000);
+      const timer = setTimeout(() => setSaveState('idle'), 2000);
       return () => clearTimeout(timer);
     }
   }, [saveState]);
@@ -153,8 +138,13 @@ export default function EditorPage({
   // --- ACTIONS & RENDER ---
 
   const handleLogout = () => {
+    // Before logging out, save any final changes if the user is a guest.
+    if (!user) {
+      localStorage.setItem("draft_guest", text);
+    }
     logout();
-    // The onAuth listener will handle the state reset.
+    setText(""); // Clear text for a clean slate on logout.
+    setSaveState("idle");
   };
 
   return (
@@ -212,17 +202,11 @@ export default function EditorPage({
           disabled={user === undefined}
         />
 
-        {text.length > 0 && text.length < 400 && (
+        {!user && text.length > 120 && (
           <div className="mt-6 flex flex-col items-start gap-4 animate-in fade-in slide-in-from-bottom-2 duration-700">
-            <p className="text-[14px] md:text-xs text-stone-400 font-sans italic">
-              You don’t have to finish this.
-            </p>
-
-            {!user && text.length > 120 && (
-              <button onClick={() => setAuthModalOpen(true)} className="text-xs font-sans text-stone-400 hover:text-stone-700 underline underline-offset-4 transition cursor-pointer">
-                Keep this safe across devices
-              </button>
-            )}
+            <button onClick={() => setAuthModalOpen(true)} className="text-xs font-sans text-stone-400 hover:text-stone-700 underline underline-offset-4 transition cursor-pointer">
+              Keep this safe across devices
+            </button>
           </div>
         )}
       </div>
