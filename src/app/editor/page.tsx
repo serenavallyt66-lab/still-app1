@@ -18,13 +18,15 @@ export default function EditorPage({
   const [user, setUser] = useState<User | undefined>(undefined);
   const [isAuthModalOpen, setAuthModalOpen] = useState(initialAuthModalOpen);
   
-  // This ref is the definitive guard to prevent race conditions and re-runs.
-  // It tracks the ID of the user (or 'guest') for which initialization has completed.
-  const initializedFor = useRef<string | null>(null);
-  
-  // The single text state that is controlled by the robust initialization logic.
-  const [text, setText] = useState("");
+  // States based on the "Single Source of Truth" architecture
+  const [mode, setMode] = useState<"guest" | "logged" | "loading">("loading");
+  const [guestText, setGuestText] = useState("");
+  const [cloudText, setCloudText] = useState("");
+  const [isMigrating, setIsMigrating] = useState(false);
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved">("idle");
+  const initialLoadComplete = useRef(false); // Ref for micro-polish
+  
+  const editorText = mode === "guest" ? guestText : cloudText;
 
   // --- AUTH & INITIAL DATA LOAD ---
 
@@ -39,113 +41,98 @@ export default function EditorPage({
     }
   }, [initialAuthModalOpen]);
 
+  // Main effect to orchestrate mode changes based on auth state.
   useEffect(() => {
-    const unsubscribe = onAuth((newUser) => {
-      // If the user logs in or out, we must clear the initialization guard.
-      // This allows the main data loading effect to run for the new state.
-      if ((newUser?.uid || null) !== (user?.uid || null)) {
-        initializedFor.current = null;
-      }
-      setUser(newUser);
-      if (newUser) {
-        handleDismissModal();
-      }
-    });
-    return () => unsubscribe();
-  }, [user?.uid]);
-
-
-  // Main effect for loading data and handling the critical guest-to-logged-in migration.
-  // This is designed to be robust against re-runs from the auth listener.
-  useEffect(() => {
-    // 1. Don't run if the auth state is still being determined.
-    if (user === undefined) return;
-    
-    const currentId = user ? user.uid : 'guest';
-    
-    // 2. THE GUARD: If we have already run the initialization for this user/guest, do not proceed.
-    if (initializedFor.current === currentId) {
-      return;
-    }
-    
-    const initializeUserData = async () => {
-      // 3. Mark initialization as having run for this ID, preventing re-entry.
-      initializedFor.current = currentId;
+    const unsubscribe = onAuth(async (newUser) => {
+      initialLoadComplete.current = false; // Reset on every auth change
       
-      // --- LOGGED-IN USER FLOW ---
-      if (user) { 
-        const guestDraft = localStorage.getItem("draft_guest");
-        // IMPORTANT: Immediately remove the guest draft to prevent race conditions.
-        localStorage.removeItem("draft_guest");
-        
-        const cloudDraft = await loadDraft(user.uid);
+      // If there's a user, we're in logged mode.
+      if (newUser) {
+        setUser(newUser); // Keep user object for other parts of UI
 
-        // CASE 1: Cloud draft exists. It is the source of truth.
-        if (cloudDraft !== null) {
-          setText(cloudDraft);
+        // This is the critical migration and loading logic.
+        setIsMigrating(true);
+        const localGuestDraft = localStorage.getItem("draft_guest");
+        const existingCloudDraft = await loadDraft(newUser.uid);
+
+        // CASE 1: Cloud already has content. It is the source of truth.
+        if (existingCloudDraft !== null) {
+          setCloudText(existingCloudDraft);
           setSaveState("saved");
-        } 
-        // CASE 2: Cloud is empty, but a guest draft existed. Migrate it.
-        else if (guestDraft && guestDraft.trim()) {
-          setText(guestDraft); // Show content immediately.
-          setSaveState("saving");
-          await saveDraft(user.uid, guestDraft); // Save to cloud.
+        }
+        // CASE 2: Cloud is empty, but a local guest draft exists. Migrate it.
+        else if (localGuestDraft && localGuestDraft.trim()) {
+          setCloudText(localGuestDraft); // Show content immediately
+          await saveDraft(newUser.uid, localGuestDraft); // Save to cloud
           setSaveState("saved");
-        } 
-        // CASE 3: New user, no drafts anywhere. Start fresh.
+        }
+        // CASE 3: New user, no drafts anywhere.
         else {
-          setText("");
+          setCloudText("");
           setSaveState("idle");
         }
-      } 
-      // --- GUEST USER FLOW ---
-      else {
-        const guestDraft = localStorage.getItem("draft_guest");
-        setText(guestDraft || "");
-        setSaveState("idle");
-      }
-    };
 
-    initializeUserData();
-  }, [user]);
+        // Migration is complete, switch to logged mode and clean up guest state.
+        setGuestText("");
+        localStorage.removeItem("draft_guest");
+        setMode("logged");
+        setIsMigrating(false);
+        handleDismissModal();
+        initialLoadComplete.current = true; // Mark initial load as complete
+      }
+      // No user, we're in guest mode.
+      else {
+        setUser(null);
+        const localGuestDraft = localStorage.getItem("draft_guest");
+        setGuestText(localGuestDraft || "");
+        setCloudText(""); // Clear cloud text on logout
+        setMode("guest");
+        initialLoadComplete.current = true; // Guest mode is also 'loaded'
+      }
+    });
+
+    return () => unsubscribe();
+  }, []); // This runs only once to set up the auth listener.
 
   // --- TEXT CHANGE & SAVING LOGIC ---
 
   const handleTextChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const newText = e.target.value;
-    setText(newText);
-    if (user) {
+    if (mode === "guest") {
+      setGuestText(newText);
+    } else if (mode === "logged") {
+      setCloudText(newText);
       setSaveState("saving");
     }
   };
 
   // Debounced save to Firestore for logged-in users.
   useEffect(() => {
-    const currentId = user ? user.uid : 'guest';
-    if (initializedFor.current !== currentId || !user || saveState !== 'saving') {
+    if (mode !== "logged" || saveState !== "saving" || isMigrating) {
       return;
     }
 
     const handler = setTimeout(() => {
-      saveDraft(user.uid, text).then(() => {
-        setSaveState("saved");
-      });
+      // Ensure user is still logged in before saving
+      if (user) {
+        saveDraft(user.uid, cloudText).then(() => {
+          setSaveState("saved");
+        });
+      }
     }, 800);
 
     return () => clearTimeout(handler);
-  }, [text, user, saveState]);
+  }, [cloudText, mode, saveState, user, isMigrating]);
 
   // Local-only save for guests.
   useEffect(() => {
-    const currentId = user ? user.uid : 'guest';
-    if (initializedFor.current !== 'guest' || user) return;
+    if (mode !== "guest") return;
+    localStorage.setItem("draft_guest", guestText);
+  }, [guestText, mode]);
 
-    localStorage.setItem("draft_guest", text);
-  }, [text, user]);
-
-  // Micro-polish: Reset 'saved' state to 'idle' after a delay
+  // Micro-polish: Reset 'saved' state to 'idle' after a delay, but not on initial load.
   useEffect(() => {
-    if (saveState === 'saved' && initializedFor.current !== null) {
+    if (saveState === 'saved' && initialLoadComplete.current) {
       const timer = setTimeout(() => setSaveState('idle'), 2000);
       return () => clearTimeout(timer);
     }
@@ -153,10 +140,12 @@ export default function EditorPage({
 
   // --- ACTIONS & RENDER ---
 
-  const handleLogout = () => {
-    // Logged data never leaks into guest mode on logout.
-    logout();
+  const handleLogout = async () => {
+    await logout();
+    // onAuth listener will handle state change to 'guest' mode.
   };
+
+  const isLoading = mode === "loading" || isMigrating;
 
   return (
     <div className="min-h-screen bg-[#fcfbf9] text-stone-800 font-serif px-6 md:px-12 py-10 transition-colors duration-500">
@@ -165,9 +154,9 @@ export default function EditorPage({
 
       <div className="max-w-2xl mx-auto flex justify-between items-center mb-10 text-[13px] md:text-xs font-sans tracking-wide text-stone-400 select-none">
         <span className="flex items-center gap-2 animate-fade-in h-4">
-          {user === undefined ? (
+          {isLoading ? (
             <span className="w-4 h-4 border-2 border-stone-200 border-t-stone-400 rounded-full animate-spin" />
-          ) : user ? (
+          ) : mode === 'logged' ? (
             <>
               {saveState === 'saving' && (
                 <>
@@ -181,9 +170,9 @@ export default function EditorPage({
                   <span className="text-stone-500 font-medium">Draft secured</span>
                 </>
               )}
-               {saveState === 'idle' && text.length > 0 && <Cloud size={14} />}
+               {saveState === 'idle' && cloudText.length > 0 && <Cloud size={14} />}
             </>
-          ) : (
+          ) : ( // guest mode
             <>
               <CloudOff size={14} />
               <span className="text-stone-500 font-medium">Local only</span>
@@ -191,11 +180,11 @@ export default function EditorPage({
           )}
         </span>
 
-        {user ? (
+        {mode === 'logged' ? (
           <button onClick={handleLogout} className="hover:text-stone-600 transition cursor-pointer">
             Logout
           </button>
-        ) : user === undefined ? null : (
+        ) : mode === 'loading' ? null : ( // guest mode
           <button onClick={() => setAuthModalOpen(true)} className="flex items-center gap-2 hover:text-stone-600 transition cursor-pointer group">
             <Lock size={12} className="group-hover:text-stone-600 transition" />
             Save privately
@@ -205,16 +194,16 @@ export default function EditorPage({
 
       <div className="max-w-2xl mx-auto relative">
         <textarea
-          value={text}
+          value={editorText}
           onChange={handleTextChange}
           autoFocus
           spellCheck={false}
           placeholder="Write what’s on your mind. Messy is fine."
           className="w-full h-[65vh] bg-transparent resize-none outline-none border-none text-xl md:text-2xl leading-relaxed placeholder:text-stone-300 placeholder:italic selection:bg-stone-200 disabled:opacity-50"
-          disabled={user === undefined}
+          disabled={isLoading}
         />
 
-        {!user && text.length > 120 && (
+        {mode === 'guest' && guestText.length > 120 && (
           <div className="mt-6 flex flex-col items-start gap-4 animate-in fade-in slide-in-from-bottom-2 duration-700">
             <button onClick={() => setAuthModalOpen(true)} className="text-xs font-sans text-stone-400 hover:text-stone-700 underline underline-offset-4 transition cursor-pointer">
               Keep this safe across devices
