@@ -16,22 +16,17 @@ export default function EditorPage({
   onAuthModalDismiss?: () => void;
 }) {
   const [user, setUser] = useState<User | undefined>(undefined);
-  const [text, setText] = useState("");
   const [isAuthModalOpen, setAuthModalOpen] = useState(initialAuthModalOpen);
+  
+  // This ref is the definitive guard to prevent race conditions and re-runs.
+  // It tracks the ID of the user (or 'guest') for which initialization has completed.
+  const initializedFor = useRef<string | null>(null);
+  
+  // The single text state that is controlled by the robust initialization logic.
+  const [text, setText] = useState("");
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved">("idle");
-  // This ref is critical to prevent debounced saves during the initial data load/migration.
-  const isInitialized = useRef(false);
-  // This ref prevents the initialization logic from re-running due to auth state changes, fixing the race condition.
-  const userInitialized = useRef<string | null | undefined>(undefined);
-
 
   // --- AUTH & INITIAL DATA LOAD ---
-
-  useEffect(() => {
-    if (initialAuthModalOpen) {
-      setAuthModalOpen(true);
-    }
-  }, [initialAuthModalOpen]);
 
   const handleDismissModal = () => {
     setAuthModalOpen(false);
@@ -39,69 +34,76 @@ export default function EditorPage({
   };
 
   useEffect(() => {
+    if (initialAuthModalOpen) {
+      setAuthModalOpen(true);
+    }
+  }, [initialAuthModalOpen]);
+
+  useEffect(() => {
     const unsubscribe = onAuth((newUser) => {
+      // If the user logs in or out, we must clear the initialization guard.
+      // This allows the main data loading effect to run for the new state.
+      if ((newUser?.uid || null) !== (user?.uid || null)) {
+        initializedFor.current = null;
+      }
       setUser(newUser);
       if (newUser) {
         handleDismissModal();
       }
     });
     return () => unsubscribe();
-  }, []);
+  }, [user?.uid]);
+
 
   // Main effect for loading data and handling the critical guest-to-logged-in migration.
   // This is designed to be robust against re-runs from the auth listener.
   useEffect(() => {
-    // Don't run if the auth state is still being determined.
+    // 1. Don't run if the auth state is still being determined.
     if (user === undefined) return;
     
-    // Prevent re-initialization for the same user/guest state to avoid race conditions.
-    const currentUserId = user ? user.uid : null;
-    if (userInitialized.current === currentUserId) return;
+    const currentId = user ? user.uid : 'guest';
+    
+    // 2. THE GUARD: If we have already run the initialization for this user/guest, do not proceed.
+    if (initializedFor.current === currentId) {
+      return;
+    }
     
     const initializeUserData = async () => {
-      // Mark this user/guest state as initialized to prevent this block from re-running.
-      userInitialized.current = currentUserId;
-      isInitialized.current = false; // Prevent other effects until initialization is complete.
+      // 3. Mark initialization as having run for this ID, preventing re-entry.
+      initializedFor.current = currentId;
       
-      if (user) { // A user is logged in.
+      // --- LOGGED-IN USER FLOW ---
+      if (user) { 
         const guestDraft = localStorage.getItem("draft_guest");
         // IMPORTANT: Immediately remove the guest draft to prevent race conditions.
-        // Its value is now safely in the guestDraft variable for this one atomic operation.
         localStorage.removeItem("draft_guest");
         
         const cloudDraft = await loadDraft(user.uid);
 
-        // CASE 1: The user has an existing draft in the cloud. This is the highest priority.
+        // CASE 1: Cloud draft exists. It is the source of truth.
         if (cloudDraft !== null) {
           setText(cloudDraft);
           setSaveState("saved");
         } 
-        // CASE 2: The user's cloud account is empty, but a local guest draft existed. Migrate it.
+        // CASE 2: Cloud is empty, but a guest draft existed. Migrate it.
         else if (guestDraft && guestDraft.trim()) {
           setText(guestDraft); // Show content immediately.
           setSaveState("saving");
           await saveDraft(user.uid, guestDraft); // Save to cloud.
           setSaveState("saved");
         } 
-        // CASE 3: New user with no drafts anywhere. Start fresh.
+        // CASE 3: New user, no drafts anywhere. Start fresh.
         else {
           setText("");
           setSaveState("idle");
         }
-
       } 
-      // CASE 4: The user is a guest (logged out).
+      // --- GUEST USER FLOW ---
       else {
         const guestDraft = localStorage.getItem("draft_guest");
         setText(guestDraft || "");
         setSaveState("idle");
       }
-
-      // Initialization is complete. Allow other effects (like debounced saving) to run.
-      // Use a small timeout to ensure it runs after the current render cycle.
-      setTimeout(() => {
-        isInitialized.current = true;
-      }, 50);
     };
 
     initializeUserData();
@@ -109,7 +111,6 @@ export default function EditorPage({
 
   // --- TEXT CHANGE & SAVING LOGIC ---
 
-  // On typing, immediately show "Saving..." for logged-in users.
   const handleTextChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const newText = e.target.value;
     setText(newText);
@@ -120,32 +121,31 @@ export default function EditorPage({
 
   // Debounced save to Firestore for logged-in users.
   useEffect(() => {
-    if (!user || !isInitialized.current || saveState !== 'saving') {
+    const currentId = user ? user.uid : 'guest';
+    if (initializedFor.current !== currentId || !user || saveState !== 'saving') {
       return;
     }
 
     const handler = setTimeout(() => {
-      if (text !== undefined) { // Ensure text is not undefined before saving
-          saveDraft(user.uid, text).then(() => {
-            setSaveState("saved");
-          });
-      }
-    }, 800); // Debounce time
+      saveDraft(user.uid, text).then(() => {
+        setSaveState("saved");
+      });
+    }, 800);
 
     return () => clearTimeout(handler);
   }, [text, user, saveState]);
 
   // Local-only save for guests.
   useEffect(() => {
-    if (user || !isInitialized.current) return;
-    if (text !== undefined) { // Ensure text is not undefined before saving
-        localStorage.setItem("draft_guest", text);
-    }
+    const currentId = user ? user.uid : 'guest';
+    if (initializedFor.current !== 'guest' || user) return;
+
+    localStorage.setItem("draft_guest", text);
   }, [text, user]);
 
-  // Micro-polish: Reset 'saved' state to 'idle' after a delay, but not on initial load.
+  // Micro-polish: Reset 'saved' state to 'idle' after a delay
   useEffect(() => {
-    if (saveState === 'saved' && isInitialized.current) {
+    if (saveState === 'saved' && initializedFor.current !== null) {
       const timer = setTimeout(() => setSaveState('idle'), 2000);
       return () => clearTimeout(timer);
     }
@@ -154,11 +154,8 @@ export default function EditorPage({
   // --- ACTIONS & RENDER ---
 
   const handleLogout = () => {
-    if (user) {
-        localStorage.setItem("draft_guest", text);
-    }
+    // Logged data never leaks into guest mode on logout.
     logout();
-    userInitialized.current = undefined; // Reset initialization on logout to allow re-init on next login
   };
 
   return (
