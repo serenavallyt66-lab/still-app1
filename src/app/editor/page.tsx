@@ -21,6 +21,9 @@ export default function EditorPage({
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved">("idle");
   // This ref is critical to prevent debounced saves during the initial data load/migration.
   const isInitialized = useRef(false);
+  // This ref prevents the initialization logic from re-running due to auth state changes, fixing the race condition.
+  const userInitialized = useRef<string | null>(null);
+
 
   // --- AUTH & INITIAL DATA LOAD ---
 
@@ -48,14 +51,17 @@ export default function EditorPage({
   // Main effect for loading data and handling the critical guest-to-logged-in migration.
   // This is designed to be robust against re-runs from the auth listener.
   useEffect(() => {
-    // Don't run on the initial undefined state while waiting for the auth check.
+    // Don't run if the auth state is still being determined.
     if (user === undefined) return;
+    
+    // Prevent re-initialization for the same user/guest state to avoid race conditions.
+    if (user && userInitialized.current === user.uid) return;
+    if (!user && userInitialized.current === null) return;
 
     const initializeUserData = async () => {
       isInitialized.current = false; // Prevent other effects until initialization is complete.
       
       if (user) { // A user is logged in.
-        // Atomically read both sources of truth before making any decisions.
         const cloudDraft = await loadDraft(user.uid);
         const guestDraft = localStorage.getItem("draft_guest");
 
@@ -79,6 +85,7 @@ export default function EditorPage({
 
         // Clean up the local draft only after all logic is complete to prevent race conditions.
         localStorage.removeItem("draft_guest");
+        userInitialized.current = user.uid; // Mark this user as initialized.
 
       } 
       // CASE 4: The user is a guest (logged out).
@@ -86,6 +93,7 @@ export default function EditorPage({
         const guestDraft = localStorage.getItem("draft_guest");
         setText(guestDraft || "");
         setSaveState("idle");
+        userInitialized.current = null; // Mark guest state as initialized.
       }
 
       // Initialization is complete. Allow other effects (like debounced saving) to run.
@@ -145,6 +153,7 @@ export default function EditorPage({
     logout();
     setText(""); 
     setSaveState("idle");
+    userInitialized.current = null; // Reset initialization on logout
   };
 
   return (
