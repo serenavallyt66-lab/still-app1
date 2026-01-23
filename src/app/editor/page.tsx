@@ -70,16 +70,14 @@ export default function EditorPage({
         } else {
           // Priority #2: No cloud draft? Check for a one-time guest migration.
           const guestDraft = localStorage.getItem("draft_guest");
-          const alreadyMigrated = localStorage.getItem("guest_migrated");
     
-          if (guestDraft && !alreadyMigrated) {
+          if (guestDraft) {
             await saveDraft(user.uid, guestDraft); // Migrate guest draft to cloud
             setText(guestDraft); // Set UI state
-            localStorage.setItem("guest_migrated", "true"); // Mark as migrated
             localStorage.removeItem("draft_guest"); // Clean up guest draft
             setSaveState("saved"); // Migrated draft is now secure
           } else {
-            // New user with no drafts, or a returning user who cleared their first draft.
+            // New user with no drafts.
             setText("");
             setSaveState("idle");
           }
