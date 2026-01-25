@@ -55,11 +55,16 @@ function StillLogo() {
 }
 
 // Simple Intersection Hook for animations
-const useIntersect = (options = {}) => {
-  const ref = useRef(null);
+function useIntersect<T extends HTMLElement>(
+  options?: IntersectionObserverInit
+) {
+  const ref = useRef<T | null>(null);
   const [visible, setVisible] = useState(false);
 
   useEffect(() => {
+    const element = ref.current;
+    if (!element) return;
+
     const observer = new IntersectionObserver(([entry]) => {
       if (entry.isIntersecting) {
         setVisible(true);
@@ -67,28 +72,20 @@ const useIntersect = (options = {}) => {
       }
     }, options);
 
-    const currentRef = ref.current;
-    if (currentRef) {
-      observer.observe(currentRef);
-    }
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [options]);
 
-    return () => {
-      if (currentRef) {
-        observer.unobserve(currentRef);
-      }
-    };
-  }, [ref, options]);
-
-  return [ref, visible];
-};
+  return { ref, visible };
+}
 
 
 // Helper for scroll reveal sections
 function ScrollBlock({ title, desc }: { title: string; desc: string }) {
-  const [ref, visible] = useIntersect({ threshold: 0.2 });
+  const { ref, visible } = useIntersect<HTMLDivElement>({ threshold: 0.2 });
   return (
     <div
-      ref={ref as React.RefObject<HTMLDivElement>}
+      ref={ref}
       className={`transition-all duration-1000 ease-out transform ${
         visible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-16"
       }`}
