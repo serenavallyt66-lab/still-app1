@@ -209,7 +209,7 @@ export default function AppEntry() {
         </div>
 
         {/* Scroll Indicator */}
-        <div className="absolute bottom-10 animate-bounce duration-[3s] opacity-20">
+        <div className="absolute bottom-10 opacity-20 animate-[bounce_3s_infinite]">
           <div className="w-[1px] h-12 bg-stone-800"></div>
         </div>
       </section>
