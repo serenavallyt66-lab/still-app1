@@ -15,7 +15,7 @@ export const metadata = {
   ],
   authors: [{ name: "Still" }],
   creator: "Still",
-  metadataBase: new URL("https://your-vercel-url.vercel.app"),
+  metadataBase: new URL("https://stillspace.vercel.app/"),
   openGraph: {
     title: "Still — Write slowly, think clearly",
     description:
