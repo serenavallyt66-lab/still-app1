@@ -22,6 +22,9 @@ export const metadata = {
       "A quiet digital space for focused, private writing. No tracking. No noise.",
     type: "website",
   },
+  verification: {
+    google: "W8penFkvoI275VzdZV9ixR_1vjjZMBZCBJ_nZ8XdAsY",
+  },
 };
 
 export default function RootLayout({
