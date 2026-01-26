@@ -1,4 +1,5 @@
 import "@/styles/globals.css";
+import { Analytics } from "@vercel/analytics/next";
 
 export const metadata = {
   title: "Still — A quiet place to write",
@@ -36,6 +37,7 @@ export default function RootLayout({
     <html lang="en">
       <body className="bg-[#fcfbf9] text-stone-800 antialiased">
         {children}
+        <Analytics />
       </body>
     </html>
   );
