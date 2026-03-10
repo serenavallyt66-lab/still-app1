@@ -1,6 +1,6 @@
 'use client';
 import React, { useState, useEffect, useRef } from "react";
-import { ArrowRight, Feather } from "lucide-react";
+import { ArrowRight, Feather, Menu, X } from "lucide-react";
 import EditorPage from "./editor/page";
 import Link from "next/link";
 import { onAuth } from "@/lib/auth";
@@ -106,6 +106,7 @@ export default function AppEntry() {
   // The correct view is determined client-side based on auth state and localStorage.
   const [view, setView] = useState<'landing' | 'editor' | 'loading'>('loading');
   const [initialAuthOpen, setInitialAuthOpen] = useState(false);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const authChecked = useRef(false);
 
   // This effect runs once on the client to determine the correct initial view.
@@ -139,7 +140,11 @@ export default function AppEntry() {
   const handleSignInClick = () => {
     setInitialAuthOpen(true);
     setView("editor");
+    setIsMobileMenuOpen(false);
   };
+
+  const navLinkClass =
+    "text-sm font-sans text-stone-500 hover:text-stone-700 transition-colors";
   
   // Render a blank page on the server and during the initial client 'loading' state.
   // This guarantees no hydration mismatch and provides a clean, flicker-free experience.
@@ -161,9 +166,50 @@ export default function AppEntry() {
     <div className="min-h-screen bg-[#fcfbf9] text-stone-800 selection:bg-stone-200 overflow-x-hidden relative">
       
       {/* TOP LEFT BRAND */}
-      <div className="absolute top-6 left-6 z-10">
-        <StillLogo />
-      </div>
+      <header className="absolute top-0 inset-x-0 z-20 px-6 md:px-10 py-6">
+        <div className="mx-auto max-w-6xl flex items-center justify-between">
+          <StillLogo />
+
+          <nav className="hidden md:flex items-center gap-8">
+            <Link href="/pricing" className={navLinkClass}>
+              Pricing
+            </Link>
+            <button
+              className="text-sm font-sans text-stone-400 hover:text-stone-600 transition-colors"
+              onClick={handleSignInClick}
+            >
+              Sign in
+            </button>
+          </nav>
+
+          <button
+            type="button"
+            aria-label="Toggle navigation menu"
+            className="md:hidden text-stone-600 hover:text-stone-800 transition-colors"
+            onClick={() => setIsMobileMenuOpen((prev) => !prev)}
+          >
+            {isMobileMenuOpen ? <X size={20} /> : <Menu size={20} />}
+          </button>
+        </div>
+
+        {isMobileMenuOpen ? (
+          <nav className="md:hidden mt-4 rounded-2xl border border-stone-200/80 bg-[#fcfbf9]/95 backdrop-blur px-4 py-4 shadow-sm flex flex-col gap-3">
+            <Link
+              href="/pricing"
+              className={navLinkClass}
+              onClick={() => setIsMobileMenuOpen(false)}
+            >
+              Pricing
+            </Link>
+            <button
+              className="w-fit text-sm font-sans text-stone-400 hover:text-stone-600 transition-colors"
+              onClick={handleSignInClick}
+            >
+              Sign in
+            </button>
+          </nav>
+        ) : null}
+      </header>
       
       {/* HERO */}
       <section className="min-h-screen flex flex-col justify-center items-center px-6 text-center relative">
